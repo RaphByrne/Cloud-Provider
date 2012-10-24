@@ -55,11 +55,11 @@ struct message_client * message_create(enum message_c_ctrl ctrl, char* name, cha
 	return m;
 }
 
-#define NUMVALS 12
+#define NUMVALS 13
 
 int string_to_ctrl(char *s)
 {
-	enum message_c_ctrl vals[NUMVALS] = {ADD, DELETE, UPDATE, VERIFY, LIST, FETCH, FETCH_FAIL, LOGIN, LOGOUT, REGISTER, B_QUERY, B_WITHDRAW};
+	enum message_c_ctrl vals[NUMVALS] = {ADD, DELETE, UPDATE, VERIFY, LIST, FETCH, FETCH_FAIL, LOGIN, LOGOUT, REGISTER, B_QUERY, B_WITHDRAW, B_VERIFY};
 	for(int i = 0; i < NUMVALS; i++) {
 		char *ctrl = ctrl_to_string(vals[i]);
 		if(strcmp(ctrl,s) == 0)
@@ -94,6 +94,8 @@ char *ctrl_to_string(enum message_c_ctrl c)
 			return strdup("QUERY");
 		case B_WITHDRAW :
 			return strdup("WITHDRAW");
+		case B_VERIFY :
+			return strdup("B_VERIFY");
 		default :
 			return strdup("UNKNOWN");
 	}

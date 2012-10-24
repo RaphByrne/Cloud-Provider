@@ -30,6 +30,7 @@ enum message_c_ctrl {
 	REGISTER = 9,
 	B_QUERY = 10,
 	B_WITHDRAW = 11,
+	B_VERIFY = 12,
 };
 typedef enum message_c_ctrl message_c_ctrl;
 

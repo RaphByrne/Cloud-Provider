@@ -74,82 +74,6 @@ int test_privkey(char *username)
 	return result;
 }
 
-BIO * connect_to(char *address)
-{
-	BIO *bio;
-	SSL *ssl;
-	SSL_CTX *ctx = (SSL_CTX *)SSL_CTX_new(SSLv23_client_method());
-
-	printf("LOADING CA CERT\n");
-	//load our ca certificate
-	if(SSL_CTX_load_verify_locations(ctx, string_cat(3,CERTPATH,"/","ca-cert.pem"), NULL) == 0) 
-	{
-		printf("FAILING\n");
-		ssl_error("Server cert load fail");
-		exit(1);
-	}
-
-	printf("LOADING CLIENT CERT\n");
-	//load our certificate used to send files
-	if(SSL_CTX_use_certificate_file(ctx, string_cat(3,CERTPATH,"/","client.pem"), SSL_FILETYPE_PEM) < 1)
-	{
-		ssl_error("failed to load client cert");
-		exit(1);
-	}
-	
-	
-	printf("LOADING PRIVATE KEY\n");
-	//load our private key
-	if(SSL_CTX_use_PrivateKey_file(ctx, string_cat(3,CERTPATH,"/","client-key.pem"), SSL_FILETYPE_PEM) < 1)
-	{
-		ssl_error("failed to load private key");
-		exit(1);
-	}
-	
-	bio = BIO_new_ssl_connect(ctx);
-	if(bio == NULL)
-	{
-		ssl_error("bio creation fail");
-		exit(1);
-	}
-
-	//set up connection
-	BIO_get_ssl(bio, &ssl);
-	SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
-	SSL_set_verify(ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
-
-	
-
-	//client stuff goes here
-	//set server hostname
-	BIO_set_conn_hostname(bio, address);
-	printf("attempting to connect to %s\n",address);
-	//test connection
-	if(BIO_do_connect(bio) <= 0)
-	{
-		printf("CONNECTION ERROR!?!?!?\n");
-		ssl_error("BIO connect error");
-		exit(1);
-	}
-	
-	
-
-	//verify the certificate
-	if(BIO_do_handshake(bio) > 0) {
-		printf("HANDSHAKE SUCCESS\n");
-		if(SSL_get_verify_result(ssl) == X509_V_OK) {
-			X509 *server_cert = SSL_get_peer_certificate(ssl);
-			if(server_cert == NULL) {
-				printf("Didn't get a server certificate\n");
-				return NULL;
-			}
-			return bio;
-		} else
-			printf("CANNOT VERIFY SERVER CERTIFICATE! SHUTTING DOWN!!!\n");
-	} else
-		printf("HANDSHAKE FAIL\n");
-	return NULL; //FAILURE
-}
 
 int main(int argc, char **argv) {	
 	
@@ -202,9 +126,10 @@ int main(int argc, char **argv) {
 	int num_files = argc;
 
 
-	BIO *bio = NULL;
+	struct ssl_connection *conn = NULL;
 
-	if((bio = connect_to(conn_string)) != NULL) {
+	if((conn = connect_to(conn_string, CERTPATH, "ca-cert.pem", "client.pem", "client-key.pem")) != NULL) {
+		BIO *bio = conn->bio;
 		if(bio == NULL) {
 			printf("WTF\n");
 			exit(1);
@@ -280,25 +205,6 @@ int op_REGISTER(BIO *bio, char *username, char *pword)
 	return result;
 }
 
-int op_LOGIN(BIO *bio, char *username, char *pword)
-{
-	int result = 0;
-	if(send_create_message(bio, LOGIN, username, pword, 0, 0) == 1) {
-		char *message = get_str_message(bio);	
-		if(message != NULL) {
-			printf("Server response: %s\n",message);
-			if(strcmp(message, "CONN_OK") != 0) {
-				printf("VERIFICATION DENIED\n");
-			} else
-				result = 1;
-			free(message);
-		} else {
-			printf("No reponse from server\n");
-		}
-	} else
-		printf("Send Login error\n");
-	return result;
-}
 
 void send_verification(BIO *bio, char *filename, unsigned char *key)
 {
@@ -314,8 +220,10 @@ void send_verification(BIO *bio, char *filename, unsigned char *key)
 
 struct trans_tok * get_cheque(char *bank_add, char *username, char *pword, int value)
 {
-	BIO *bio = NULL;
-	if((bio = connect_to(bank_add)) != NULL) {
+	struct ssl_connection *conn = NULL;
+	if((conn = connect_to(bank_add, CERTPATH, "ca-cert.pem", "client.pem", "client-key.pem")) != NULL) {
+		BIO *bio = conn->bio;
+		struct trans_tok *t = NULL;
 		if(op_LOGIN(bio, username, pword)) {
 			memset(pword, 0, strlen(pword));
 			send_create_message(bio, B_WITHDRAW, "", "", 0, 0);
@@ -323,12 +231,10 @@ struct trans_tok * get_cheque(char *bank_add, char *username, char *pword, int v
 			char *res = get_str_message(bio);
 			if(res != NULL) {
 				if(strncmp(res, "TRANS_OK", strlen("TRANS_OK")) == 0) {
-					struct trans_tok *t = calloc(1, sizeof(*t));
-					if(get_trans_tok(bio, t) > 0)
-						return t;
-					else {
+					t = calloc(1, sizeof(*t));
+					if(get_trans_tok(bio, t) <= 0) {
+						t = NULL;
 						free(t);
-						return NULL;
 					}
 				} else {
 					printf("TRANS FAIL: %s\n",res);
@@ -337,6 +243,8 @@ struct trans_tok * get_cheque(char *bank_add, char *username, char *pword, int v
 				printf("No response from bank to WITHDRAW req\n");
 		} else
 			printf("couldn't verify ourselves with bank at %s\n", bank_add);
+		BIO_free_all(bio);
+		return t;
 	} else {
 		printf("couldn't connect to %s\n", bank_add);
 	}

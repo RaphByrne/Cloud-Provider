@@ -12,6 +12,7 @@
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
+#include <openssl/pem.h>
 #include <rpc/xdr.h>
 #include <dirent.h>
 #include "utilities.h"
@@ -32,6 +33,7 @@ int num_users = 0;
 
 void send_query_response(BIO *bio, char *username);
 void withdraw_response(BIO *bio, char *username);
+void verify_response(BIO *bio);
 
 static void usage(int status)
 {
@@ -146,7 +148,7 @@ int user_exists(char *username)
 					free(name);
 				}
 			}
-			free(line);
+			//free(line);
 		}
 		fchmod(fileno(f), 0); //reset the passfile's permissions
 		fclose(f);
@@ -160,9 +162,10 @@ int user_exists(char *username)
 
 int add_user(char *username, char *pword)
 {
+	printf("Adding user %s\n", username);
 	char *salt = gensalt(NULL, NULL);
 	char *phash = crypt(pword, salt); //TODO not using a great random function here
-	memset(pword, 0, strlen(pword)); //ZEROS THE PASSWORD AFTER HASHING IT
+	//memset(pword, 0, strlen(pword)); //ZEROS THE PASSWORD AFTER HASHING IT
 	chmod(PFILE, S_IWUSR); //let us write to the PFILE
 	FILE *f = fopen(PFILE, "a");
 	int result = 0;
@@ -175,7 +178,7 @@ int add_user(char *username, char *pword)
 	chmod(PFILE, 0);
 	memset(phash, 0, strlen(phash));
 	free(salt);
-	free(phash);
+	//free(phash);
 	return result;
 }
 
@@ -346,6 +349,9 @@ int main(int argc, char **argv) {
 								case B_WITHDRAW :
 									withdraw_response(out, username);
 									break;
+								case B_VERIFY :
+									verify_response(out);
+									break;
 								default :
 									printf("UNKNOWN CLIENT COMMAND\n");
 							}
@@ -363,14 +369,66 @@ int main(int argc, char **argv) {
 				printf("COULD NOT VERIFY CLIENT\n");
 				ssl_error("client verification");
 			}
-			//SSL_free(tmpssl);
+			BIO_free(out);
 		} else {
 			printf("HANDSHAKE FAILED\n");
 		}
-		//BIO_free(out);
 	}
 
 	return 0;
+}
+
+void verify_response(BIO *bio)
+{
+	struct trans_tok *t = calloc(1, sizeof *t);
+	get_trans_tok(bio, t);
+	if(t != NULL) {
+		printf("verifying token\n");
+		unsigned char *orig_sig = t->bank_sig;
+		t->bank_sig = (unsigned char*)"AVERYSMALLAMOUNTOFPADDING"; //reset the message
+		unsigned char *buf = buffer_trans_tok(t, 200);
+		FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider-key.pem"), "r");
+		if(f != NULL) {
+			RSA* rsa = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
+			int s1 =  RSA_size(rsa);
+			if(RSA_verify(NID_sha1, buf, 200, orig_sig, &s1, rsa)) {
+				printf("VERIFY SUCCESS\n");
+				send_string(bio, "VALIDATION_SUCCESS");
+			} else {
+				ssl_error("Could not create signature");
+				send_string(bio, "VALIDATION ERROR");
+			}
+		} else {
+			perror("Could not open private key file");
+			send_string(bio, "VALIDATION ERROR");
+		}
+	} else {
+		fprintf(stderr, "CANNOT VERIFY NULL TOKEN\n");
+		send_string(bio, "TOKEN RECEIVE ERROR");
+	}
+}
+
+struct trans_tok * create_token(char *username, int value)
+{	
+	//TODO get serial from trans_list
+	struct trans_tok *t = create_trans_tok(username, 1, value, (unsigned char*)"AVERYSMALLAMOUNTOFPADDING");
+	unsigned char *buf = buffer_trans_tok(t, 200);
+	FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider-key.pem"), "r");
+	if(f != NULL) {
+		RSA* rsa = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
+		unsigned char *sig = malloc(RSA_size(rsa));
+		int s1 =  RSA_size(rsa);
+		if(RSA_sign(NID_sha1, buf, 200, sig, &s1, rsa)) {
+			t->bank_sig = sig;
+			return t;
+		} else {
+			ssl_error("Could not create signature");
+			return NULL;
+		}
+	} else {
+		perror("Could not open private key file");
+		return NULL;
+	}
 }
 
 void withdraw_response(BIO *bio, char *username)
@@ -385,10 +443,15 @@ void withdraw_response(BIO *bio, char *username)
 				printf("couldn't send withdrawal response\n");
 			} else {
 				//TODO serials and sigs
-				if(send_create_trans_tok(bio, username, 1, r->value, (unsigned char*)"abc") > 0)
-					a->balance = a->balance - r->value;
-				else
-					printf("Trans Tok not send, not deducting balance\n");
+				struct trans_tok *t = create_token(username, r->value);
+				if(t != NULL) {
+					print_trans_tok(t);
+					if(send_trans_tok(bio, t) > 0)
+						a->balance = a->balance - r->value;
+					else
+						fprintf(stderr,"Trans Tok not sent, not deducting balance\n");
+				} else
+					fprintf(stderr, "Token creation fail\n");
 			}
 		} else {
 			printf("not enough money to complete request\n");
@@ -397,6 +460,7 @@ void withdraw_response(BIO *bio, char *username)
 	} else {
 		printf("didn't get trans req\n");
 	}
+	printf("Finised withdraw\n");
 	free(r);
 }
 

@@ -257,6 +257,40 @@ int delete_file(BIO *bio, char* username, char* filename)
 	return result;
 }
 
+int verify_token(struct trans_tok *t)
+{
+	//TODO need to log in to bank
+	struct ssl_connection *conn = connect_to("127.0.0.1:1111",CERTPATH,"ca-cert.pem","provider.pem","provider-key.pem");
+	if(conn != NULL) {
+		BIO *bio = conn->bio;
+		int result = 0;
+		if(op_LOGIN(bio, "provider", "provider")) {
+			send_create_message(bio, B_VERIFY, "", "", 0, 0);
+			send_trans_tok(bio, t);
+			char *res = get_str_message(bio);
+			if(res != NULL) {
+				if(strncmp(res,"VALIDATION_SUCCESS", strlen("VALIDATION_SUCCESS")) == 0) {
+					printf("Validated money!\n");
+					free(res);
+					result = 1;
+				} else {
+					fprintf(stderr, "Validation Failure: %s\n", res);
+					free(res);
+				}				
+			} else {
+				fprintf(stderr, "No response from bank\n");
+			}
+		} else {
+			fprintf(stderr, "Could not verify ourselves with bank\n");
+		}
+		BIO_free_all(bio);
+		return result;
+	} else {
+		ssl_error("couldn't connect to bank to verify token");
+		return 0;
+	}
+}
+
 //read and store a file from the stream
 int add_file(BIO * out, char *username, char* filename, mode_t file_mask, long filesize)
 {
@@ -274,35 +308,38 @@ int add_file(BIO * out, char *username, char* filename, mode_t file_mask, long f
 			if(money_res != NULL) {
 				if(strncmp(money_res, "SENDING_PAYMENT", strlen("SENDING_PAYMENT")) == 0) {
 					struct trans_tok *t = calloc(1, sizeof *t );
-					if(get_trans_tok(out, t) > 0) {
-						//TODO validate trans_tok
-						int err_code = 0;
-						if((err_code = get_file(out, user_filename, S_IRUSR, filesize)) > 0) {
-							//encode the file's permissions into another file
-							char *permdir = PERMDIR;
-							char *perm_file = string_cat(3,permdir,"/",filename);
-							store_permissions(perm_file, file_mask);
-							free(perm_file);
-							free(permdir);
-							
-							//get the verification file
-							char *veridir = VERIDIR;
-							char *veri_file = string_cat(3, veridir, "/", filename);
-							get_file(out, veri_file, S_IRUSR, FILE_HASH_SIZE); //TODO same check as above here
-							free(veridir);
-							free(veri_file);
+					if(get_trans_tok(out, t) > 0) {	
+						if(verify_token(t)) {
+							int err_code = 0;
+							err_code = get_file(out, user_filename, S_IRUSR, filesize);
+							if(err_code > 0) {
+								//encode the file's permissions into another file
+								char *permdir = PERMDIR;
+								char *perm_file = string_cat(3,permdir,"/",filename);
+								store_permissions(perm_file, file_mask);
+								free(perm_file);
+								free(permdir);
+								
+								//get the verification file
+								char *veridir = VERIDIR;
+								char *veri_file = string_cat(3, veridir, "/", filename);
+								get_file(out, veri_file, S_IRUSR, FILE_HASH_SIZE); //TODO same check as above here
+								free(veridir);
+								free(veri_file);
 
-							printf("Finished writing\n");	
-						} else if (err_code == -2) {
-							printf("FILE ADD FAIL\n");
-							send_string(out, "FILESIZE AND REPORTED FILESIZE INCONSISTANT");
-							result = -5;
+								printf("Finished writing\n");	
+							} else if (err_code == -2) {
+								printf("FILE ADD FAIL\n");
+								send_string(out, "FILESIZE AND REPORTED FILESIZE INCONSISTANT");
+								result = -5;
+							} else {
+								result = -1;
+								printf("FILE ADD FAIL\n");
+								send_string(out, "FILE WRITE ERROR");
+							}
 						} else {
-							result = -1;
-							printf("FILE ADD FAIL\n");
-							send_string(out, "FILE WRITE ERROR");
+							result = -5;
 						}
-					
 					} else {
 						printf("Error receiving payment\n");
 						result = -5; //-5 means untrustworthy connection, do not continue communication	
@@ -402,7 +439,7 @@ int user_exists(char *username)
 					free(name);
 				}
 			}
-			free(line);
+			//free(line);
 		}
 		fchmod(fileno(f), 0); //reset the passfile's permissions
 		fclose(f);
@@ -431,7 +468,7 @@ int add_user(char *username, char *pword)
 	chmod(PFILE, 0);
 	memset(phash, 0, strlen(phash));
 	free(salt);
-	free(phash);
+	//free(phash);
 	return result;
 }
 
@@ -616,6 +653,7 @@ int main(int argc, char **argv) {
 				//BIO_write(out, message, strlen(message)+1);
 			}	
 			//SSL_free(&tmpssl);
+			BIO_free(out);
 		} else {
 			printf("HANDSHAKE FAILED\n");
 		}

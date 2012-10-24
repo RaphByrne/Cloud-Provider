@@ -1,6 +1,24 @@
 #include "utilities.h"
 
-
+int op_LOGIN(BIO *bio, char *username, char *pword)
+{
+	int result = 0;
+	if(send_create_message(bio, LOGIN, username, pword, 0, 0) == 1) {
+		char *message = get_str_message(bio);	
+		if(message != NULL) {
+			printf("Server response: %s\n",message);
+			if(strcmp(message, "CONN_OK") != 0) {
+				printf("VERIFICATION DENIED\n");
+			} else
+				result = 1;
+			free(message);
+		} else {
+			printf("No reponse from server\n");
+		}
+	} else
+		printf("Send Login error\n");
+	return result;
+}
 
 int unsigned_string_equals(unsigned char *s1, int l1, unsigned char *s2, int l2)
 {
@@ -375,3 +393,87 @@ int send_create_message(BIO *bio, enum message_c_ctrl ctrl, char *data1, char *d
 	xdr_free((xdrproc_t) xdr_message_client, (char *)m);
 	return result;
 }
+
+
+
+struct ssl_connection * connect_to(char *address, char *certpath, char *cacert, char *cert, char *privkey)
+{
+	struct ssl_connection *conn = calloc(1, sizeof *conn);
+	//BIO *bio;
+	//SSL *ssl;
+	SSL_CTX *ctx = (SSL_CTX *)SSL_CTX_new(SSLv23_client_method());
+
+	printf("LOADING CA CERT\n");
+	//load our ca certificate
+	if(SSL_CTX_load_verify_locations(ctx, string_cat(3,certpath,"/",cacert), NULL) == 0) 
+	{
+		printf("FAILING\n");
+		ssl_error("Server cert load fail");
+		exit(1);
+	}
+
+	printf("LOADING CLIENT CERT\n");
+	//load our certificate used to send files
+	if(SSL_CTX_use_certificate_file(ctx, string_cat(3,certpath,"/",cert), SSL_FILETYPE_PEM) < 1)
+	{
+		ssl_error("failed to load client cert");
+		exit(1);
+	}
+	
+	
+	printf("LOADING PRIVATE KEY\n");
+	//load our private key
+	if(SSL_CTX_use_PrivateKey_file(ctx, string_cat(3,certpath,"/",privkey), SSL_FILETYPE_PEM) < 1)
+	{
+		ssl_error("failed to load private key");
+		exit(1);
+	}
+	
+	SSL_CTX_set_timeout(ctx, 5);
+
+	conn->bio = BIO_new_ssl_connect(ctx);
+	if(conn->bio == NULL)
+	{
+		ssl_error("bio creation fail");
+		exit(1);
+	}
+
+	//set up connection
+	BIO_get_ssl(conn->bio, &conn->ssl);
+	SSL_set_mode(conn->ssl, SSL_MODE_AUTO_RETRY);
+	SSL_set_verify(conn->ssl, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+
+	
+
+	//client stuff goes here
+	//set server hostname
+	BIO_set_conn_hostname(conn->bio, address);
+	printf("attempting to connect to %s\n",address);
+	//test connection
+	if(BIO_do_connect(conn->bio) <= 0)
+	{
+		printf("CONNECTION ERROR!?!?!?\n");
+		ssl_error("BIO connect error");
+		exit(1);
+	}
+	
+	
+
+	//verify the certificate
+	if(BIO_do_handshake(conn->bio) > 0) {
+		printf("HANDSHAKE SUCCESS\n");
+		if(SSL_get_verify_result(conn->ssl) == X509_V_OK) {
+			X509 *server_cert = SSL_get_peer_certificate(conn->ssl);
+			if(server_cert == NULL) {
+				printf("Didn't get a server certificate\n");
+				return NULL;
+			}
+			return conn;
+		} else
+			printf("CANNOT VERIFY SERVER CERTIFICATE! SHUTTING DOWN!!!\n");
+	} else
+		printf("HANDSHAKE FAIL\n");
+	return NULL; //FAILURE
+}
+
+

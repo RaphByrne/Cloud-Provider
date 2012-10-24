@@ -105,6 +105,19 @@ int get_trans_tok(BIO* bio, struct trans_tok *t)
 	return result;
 }
 
+unsigned char* buffer_trans_tok(struct trans_tok *t, size_t size)
+{
+	char *buf = malloc(size);
+	XDR xdr;
+	xdrmem_create(&xdr, buf, size, XDR_ENCODE);
+	if(!xdr_trans_tok(&xdr, t)) {
+		perror("could not encode trans tok\n");
+		return NULL;
+	}
+	xdr_destroy(&xdr);
+	return buf;
+}
+
 int send_trans_tok(BIO *bio, struct trans_tok *t)
 {
 	char *buf = calloc(BUFSIZ, sizeof(char));

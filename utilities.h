@@ -24,6 +24,17 @@
 
 extern char *strdup(const char *str);
 
+#ifndef SSL_CONNECT
+#define SSL_CONNECT
+struct ssl_connection {
+	BIO *bio;
+	SSL *ssl;
+};
+
+struct ssl_connection * connect_to(char *address, char *certpath, char *cacert, char *cert, char *privkey);
+#endif
+
+int op_LOGIN(BIO *bio, char *username, char *pword);
 int unsigned_string_equals(unsigned char *s1, int l1, unsigned char *s2, int l2);
 char * string_cat(int n, ...);
 int get_char_buf(BIO* bio, const void *buf, int size);

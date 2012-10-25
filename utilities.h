@@ -15,6 +15,7 @@
 #include "openssl/err.h"
 #include "openssl/pem.h"
 #include <openssl/sha.h>
+#include <openssl/rsa.h>
 #include <openssl/blowfish.h>
 #include <openssl/evp.h>
 #include "messages.h"

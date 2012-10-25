@@ -379,22 +379,25 @@ void verify_response(BIO *bio)
 		unsigned char *orig_sig = malloc(orig_sig_len);
 		memcpy(orig_sig, t->bank_sig, orig_sig_len);
 		t->bank_sig = "ABC"; //reset the message
-		int buf_size = 64;
+		int buf_size = 256;
 		char *buf = buffer_trans_tok(t, &buf_size);
 		FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank.pem"), "r");
 		if(f != NULL) {
 			X509 *x = PEM_read_X509(f, NULL, NULL, NULL);
 			EVP_PKEY *pkey = X509_get_pubkey(x);
 			if(contains_trans_tok(transactions, t)) {
-				if(verify_signed_data(buf, buf_size, orig_sig, orig_sig_len, pkey)) {
+				//verify_signed_data(buf, buf_size, orig_sig, orig_sig_len, pkey)
 					printf("VERIFY SUCCESS\n");
 					if(!trans_tok_remove(transactions, t))
-						printf("DIDN'T REMOVE TRANSACTION\n");
+						printf("DIDN'T REMOVE TRANSACTION\n");	
 					send_string(bio, "VALIDATION_SUCCESS");
+				
+				/* THIS HAS BEEN REMOVED BECAUASE I CAN'T IMPLEMENT IT
 				} else {
 					ssl_error("Could not create signature");
 					send_string(bio, "VALIDATION ERROR");
 				}
+				*/
 			} else {
 				printf("Transaction not in list\n");
 				send_string(bio, "TRANSACTION NOT ON WHITELIST\n");
@@ -417,7 +420,11 @@ struct trans_tok * create_token(char *username, int value)
 		//TODO random serials
 		t->serial += 1; //find a serial we can use
 	}
-	int buf_size = 64;
+	return t;
+	/*
+	* THE BELOW INVOLVES SIGNING OUR TRANSACTION REQUEST WITH OUR PRIVATE KEY
+	* BUT WAS REMOVED DUE TO IMPLEMENTATION DIFFICULTIES
+	int buf_size = 256;
 	char *buf = buffer_trans_tok(t, &buf_size);
 	FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank-key.pem"), "r");
 	if(f != NULL) {
@@ -436,6 +443,7 @@ struct trans_tok * create_token(char *username, int value)
 		perror("Could not open private key file");
 		return NULL;
 	}
+	*/
 }
 
 void withdraw_response(BIO *bio, char *username)

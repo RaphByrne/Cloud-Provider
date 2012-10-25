@@ -134,28 +134,31 @@ int send_u_string(BIO *bio, unsigned char* s, int len)
 
 unsigned char *sign_data(char *data, size_t len, EVP_PKEY* key, int *sig_len) 
 {
-	EVP_MD_CTX *ctx = EVP_MD_CTX_create();
-	EVP_SignInit(ctx, EVP_sha256());
-	EVP_SignUpdate(ctx, data, len);
-	unsigned char * sig = malloc(EVP_PKEY_size(key));
-	int tmplen = EVP_PKEY_size(key);
-	if(!EVP_SignFinal(ctx, sig,  &tmplen, key)) {
-		ssl_error("Signing");
-		return NULL;
+	EVP_PKEY_CTX *ctx;
+	ctx = EVP_PKEY_CTX_new(key, NULL);
+	EVP_PKEY_sign_init(ctx);
+	EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+	EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256());
+
+	EVP_PKEY_sign(ctx, NULL, sig_len, data, len); //determines the sig_len
+	printf("Sig_len %d\n", *sig_len);
+	unsigned char * sig = OPENSSL_malloc(*sig_len);
+	if(EVP_PKEY_sign(ctx, sig, sig_len, data, len <= 0)) {
+		ssl_error("PKEY SIGN");
+		sig = NULL;
 	}
-	*sig_len = tmplen;
 	return sig;
 }
 
 int verify_signed_data(char *data, size_t data_len, unsigned char *orig_sig, size_t sig_len, EVP_PKEY *key)
 {
-	EVP_MD_CTX *ctx = EVP_MD_CTX_create();
-	EVP_VerifyInit(ctx, EVP_sha256());
-	if(!EVP_VerifyUpdate(ctx, data, data_len)) {
-		ssl_error("Verify update");
-		return -1;
-	}
-	return EVP_VerifyFinal(ctx, orig_sig, sig_len, key);
+	EVP_PKEY_CTX *ctx;
+	ctx = EVP_PKEY_CTX_new(key, NULL);
+	EVP_PKEY_verify_init(ctx);
+	EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
+	EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256());
+
+	return EVP_PKEY_verify(ctx, orig_sig, sig_len, data, data_len);
 }
 
 //len is length of return result

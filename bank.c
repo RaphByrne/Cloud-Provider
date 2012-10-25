@@ -374,6 +374,7 @@ int main(int argc, char **argv) {
 					free(m);
 				} else {
 					printf("COULD NOT VERIFY CLIENT\n");
+					send_string(out, "COULD NOT VERIFY");
 				}
 				free(username);
 			} else {

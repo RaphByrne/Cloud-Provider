@@ -5,3 +5,4 @@ PWORD=$4
 cd client
 ./client $PROVIDER_ADD REGISTER $USERNAME $PWORD
 ./client $BANK_ADD REGISTER $USERNAME $PWORD
+./client $BANK_ADD REGISTER provider provider

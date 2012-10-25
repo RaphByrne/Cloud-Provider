@@ -151,13 +151,13 @@ int add_user(char *username, char *pword)
 		printf("Could not open PFILE to add a user");
 	fclose(f);
 	chmod(PFILE, 0);
-	memset(phash, 0, strlen(phash));
+	//memset(phash, 0, strlen(phash));
 	free(salt);
 	//free(phash);
-	//THIS IS MAINLY FOR TESTING (SO WE DON'T HAVE TO RE-REGISTER EVERYONE
+	//THIS IS MAINLY FOR TESTING (SO WE DON'T HAVE TO RE-REGISTER EVERYONE)
 	f = fopen(ACCOUNTS_FILE,"a");
 	if(f != NULL) {
-		if(fprintf(f,"%s %d\n", username, 5) > 0) //give everyone 5 to start (mainly for testing)
+		if(fprintf(f,"%s %d\n", username, 20) > 0) //give everyone 20 to start (mainly for testing)
 			result = 1;
 	} else
 		printf("Could not open ACCOUNTS_FILE to add a user");
@@ -305,6 +305,7 @@ int main(int argc, char **argv) {
 					register_user(out, mess->name, mess->pword);
 					init_accounts(); //we will have updated the file (FOR TESTING PURPOSES)
 					xdr_free((xdrproc_t)xdr_message_client, (char *)mess);
+					BIO_free(out);
 					continue;
 				}
 				//verify the client
@@ -373,17 +374,19 @@ void verify_response(BIO *bio)
 	get_trans_tok(bio, t);
 	if(t != NULL) {
 		printf("verifying token\n");
-		unsigned char *orig_sig = malloc(t->sig_len);
-		memcpy(orig_sig, t->bank_sig, t->sig_len);
-		t->bank_sig = (unsigned char*)"AVERYSMALLAMOUNTOFPADDING"; //reset the message
-		int buf_size = 256;
+		u_int orig_sig_len = t->sig_len;
+		t->sig_len = 0;
+		unsigned char *orig_sig = malloc(orig_sig_len);
+		memcpy(orig_sig, t->bank_sig, orig_sig_len);
+		t->bank_sig = "ABC"; //reset the message
+		int buf_size = 64;
 		char *buf = buffer_trans_tok(t, &buf_size);
 		FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank.pem"), "r");
 		if(f != NULL) {
 			X509 *x = PEM_read_X509(f, NULL, NULL, NULL);
 			EVP_PKEY *pkey = X509_get_pubkey(x);
 			if(contains_trans_tok(transactions, t)) {
-				if(verify_signed_data(buf, buf_size, orig_sig, t->sig_len, pkey)) {
+				if(verify_signed_data(buf, buf_size, orig_sig, orig_sig_len, pkey)) {
 					printf("VERIFY SUCCESS\n");
 					if(!trans_tok_remove(transactions, t))
 						printf("DIDN'T REMOVE TRANSACTION\n");
@@ -408,12 +411,13 @@ void verify_response(BIO *bio)
 
 struct trans_tok * create_token(char *username, int value)
 {	
-	struct trans_tok *t = create_trans_tok(username, 1, value, (unsigned char*)"AVERYSMALLAMOUNTOFPADDING");
+	struct trans_tok *t = create_trans_tok(username, 1, value, "ABC");
+	
 	while(contains_trans_tok(transactions, t)) {
 		//TODO random serials
 		t->serial += 1; //find a serial we can use
 	}
-	int buf_size = 256;
+	int buf_size = 64;
 	char *buf = buffer_trans_tok(t, &buf_size);
 	FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank-key.pem"), "r");
 	if(f != NULL) {

@@ -31,13 +31,15 @@ struct trans_tok {
 typedef struct trans_tok trans_tok;
 
 struct trans_req *create_trans_req(char *payer, u_int value);
-struct trans_tok *create_trans_tok(char *payer, u_int serial, u_int value, unsigned char *sig);
+struct trans_tok *create_trans_tok(char *payer, u_int serial, u_int value, char *sig);
 int trans_tok_equals(struct trans_tok *t1, struct trans_tok *t2);
 void print_trans_tok(struct trans_tok *t);
 int get_trans_tok(BIO* bio, struct trans_tok *t);
 int send_trans_tok(BIO *bio, struct trans_tok *t);
 int send_create_trans_tok(BIO *bio, char* payer, u_int serial, u_int value, unsigned char *sig);
 unsigned char* buffer_trans_tok(struct trans_tok *t, int * size);
+int get_trans_tok_from_buf(char *buf, struct trans_tok *t);
+char * send_trans_tok_to_buf(struct trans_tok *t);
 int send_trans_req(BIO *bio, struct trans_req* r);
 int send_create_trans_req(BIO *bio, char* payer, u_int value);
 int get_trans_req(BIO* bio, struct trans_req *r);

@@ -135,7 +135,7 @@ int send_u_string(BIO *bio, unsigned char* s, int len)
 unsigned char *sign_data(char *data, size_t len, EVP_PKEY* key, int *sig_len) 
 {
 	EVP_MD_CTX *ctx = EVP_MD_CTX_create();
-	EVP_SignInit(ctx, EVP_sha1());
+	EVP_SignInit(ctx, EVP_sha256());
 	EVP_SignUpdate(ctx, data, len);
 	unsigned char * sig = malloc(EVP_PKEY_size(key));
 	int tmplen = EVP_PKEY_size(key);
@@ -147,12 +147,14 @@ unsigned char *sign_data(char *data, size_t len, EVP_PKEY* key, int *sig_len)
 	return sig;
 }
 
-unsigned char *verify_signed_data(char *data, size_t data_len, unsigned char *orig_sig, size_t sig_len, EVP_PKEY *key)
+int verify_signed_data(char *data, size_t data_len, unsigned char *orig_sig, size_t sig_len, EVP_PKEY *key)
 {
 	EVP_MD_CTX *ctx = EVP_MD_CTX_create();
-	EVP_VerifyInit(ctx, EVP_sha1());
-	if(!EVP_VerifyUpdate(ctx, data, data_len))
+	EVP_VerifyInit(ctx, EVP_sha256());
+	if(!EVP_VerifyUpdate(ctx, data, data_len)) {
 		ssl_error("Verify update");
+		return -1;
+	}
 	return EVP_VerifyFinal(ctx, orig_sig, sig_len, key);
 }
 
@@ -263,6 +265,29 @@ int decrypt_encrypt_file(char *filein, char *fileout, unsigned char *key, int do
 	fclose(in);
 	fclose(out);
 	return 1;
+}
+
+char* decrypt_encrypt_buffer(char *inbuf, int inlen, int *len, unsigned char *key, int do_crypt)
+{
+	unsigned char *outbuf = malloc(1024 + EVP_MAX_BLOCK_LENGTH);
+	int outlen;
+	unsigned char iv[] = "0";
+	EVP_CIPHER_CTX ctx;
+	EVP_CIPHER_CTX_init(&ctx);
+	EVP_CipherInit_ex(&ctx, EVP_des_ede3_cbc(), NULL, key, iv, do_crypt); //do_crypt 1 for enc, 0 for dec
+	if(!EVP_CipherUpdate(&ctx, outbuf, &outlen, inbuf, inlen)) {
+		fprintf(stderr, "Cipher Update on buffer\n");
+		ssl_error("Cipher update");
+		return NULL;
+	}
+
+	if(!EVP_CipherFinal_ex(&ctx, outbuf, &outlen)) {
+		ssl_error("cipher final");
+		return NULL;
+	}
+	
+	*len = outlen;
+	return outbuf;
 }
 
 int send_file(BIO *bio, char* filename)

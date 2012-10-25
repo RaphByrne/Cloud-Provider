@@ -44,7 +44,7 @@ struct trans_req *create_trans_req(char *payer, u_int value)
 	return out;
 }
 
-struct trans_tok *create_trans_tok(char *payer, u_int serial, u_int value, unsigned char *bank_sig)
+struct trans_tok *create_trans_tok(char *payer, u_int serial, u_int value, char *bank_sig)
 {
 	printf("CREATING TRANS TOK\n");
 	struct trans_tok *out = calloc(1, sizeof *out);
@@ -83,9 +83,10 @@ void print_trans_tok(struct trans_tok *t)
 		printf("%s",t->payer);
 	else
 		printf("NULL");
-	printf("\t SERIAL: %u\t VALUE: %u",t->serial, t->value);	
-	printf("\n");
-	
+	printf("\t SERIAL: %u\t VALUE: %u",t->serial, t->value);
+	printf("\n\t");	
+	print_hash(t->bank_sig, t->sig_len);
+	printf("\t SIG_LEN: %u\n", t->sig_len);
 }
 
 int get_trans_tok(BIO* bio, struct trans_tok *t)
@@ -141,6 +142,36 @@ int send_create_trans_tok(BIO *bio, char* payer, u_int serial, u_int value, unsi
 	int result = send_trans_tok(bio, t);
 	xdr_free((xdrproc_t) xdr_trans_tok, (char *)t);
 	return result;
+}
+
+int get_trans_tok_from_buf(char *buf, struct trans_tok *t)
+{
+	int result = 0;
+	XDR xdr;
+	xdrmem_create(&xdr, buf, BUFSIZ, XDR_DECODE);
+	if(!xdr_trans_tok(&xdr, t)) { 
+		perror("COULD NOT LOAD TRANS TOK FROM BUF\n");
+		result = -1;
+		exit(0);
+	}
+	print_trans_tok(t);
+	xdr_destroy(&xdr);
+	return result;
+}
+
+
+char * send_trans_tok_to_buf(struct trans_tok *t)
+{
+	char *buf = calloc(BUFSIZ, sizeof(char));
+	XDR xdr;
+	xdrmem_create(&xdr, buf, BUFSIZ, XDR_ENCODE);
+	if(!xdr_trans_tok(&xdr, t)) {
+		perror("could not encode trans tok\n");
+		buf = NULL;
+		exit(0);
+	}
+	xdr_destroy(&xdr);
+	return buf;
 }
 
 int get_trans_req(BIO* bio, struct trans_req *r)

@@ -314,6 +314,7 @@ int add_file(BIO * out, char *username, char* filename, mode_t file_mask, long f
 								send_string(out, "FILE WRITE ERROR");
 							}
 						} else {
+							send_string(out, "PAYMENT DENIED");
 							result = -5;
 						}
 					} else {
@@ -442,7 +443,7 @@ int add_user(char *username, char *pword)
 		printf("Could not open PFILE to add a user");
 	fclose(f);
 	chmod(PFILE, 0);
-	memset(phash, 0, strlen(phash));
+	//memset(phash, 0, strlen(phash));
 	free(salt);
 	//free(phash);
 	return result;
@@ -557,6 +558,7 @@ int main(int argc, char **argv) {
 				if(mess->ctrl == REGISTER) {
 					register_user(out, mess->name, mess->pword);
 					xdr_free((xdrproc_t)xdr_message_client, (char *)mess);
+					BIO_free(out);
 					continue;
 				}
 				//verify the client

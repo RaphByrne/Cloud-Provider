@@ -114,12 +114,10 @@ void add_trans(struct t_list *list, struct trans_tok* tok)
 int contains_trans_tok(struct t_list *list, struct trans_tok *tok)
 {
 	struct t_node *cursor = list->first;
-	if(cursor != NULL) {
-		while(cursor != NULL) {
-			if(trans_tok_equals(cursor->tok, tok))
-				return 1;
-			cursor = cursor->next;
-		}
+	while(cursor != NULL) {
+		if(trans_tok_equals(cursor->tok, tok))
+			return 1;
+		cursor = cursor->next;
 	}
 	return 0;
 }
@@ -141,6 +139,7 @@ int trans_tok_remove(struct t_list *list, struct trans_tok *tok)
 	if(cursor != NULL) {
 		if(trans_tok_equals(tok, cursor->tok)) {
 			list->first = list->first->next;
+			return 1;
 			//free(cursor); //TODO
 		} else
 			while(cursor->next != NULL) {

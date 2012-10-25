@@ -217,11 +217,20 @@ void init_accounts()
 	}
 }
 
+struct t_list *transactions;
+
+void init_transactions()
+{
+	transactions = init_trans_list();
+
+}
+
 int main(int argc, char **argv) {	
 
 
 	init_SSL();
 	init_accounts();
+	init_transactions();
 
 	argv0	= (argv0 = strrchr(argv[0],'/')) ? argv0+1 : argv[0];
 	opterr	= 0;
@@ -360,6 +369,8 @@ int main(int argc, char **argv) {
 						m = calloc(1,sizeof(*m));
 					}
 					printf("Client closed the connect\n");
+					account_list_print(accounts);
+					trans_tok_list_print(transactions);
 					free(m);
 				} else {
 					printf("COULD NOT VERIFY CLIENT\n");
@@ -384,19 +395,28 @@ void verify_response(BIO *bio)
 	get_trans_tok(bio, t);
 	if(t != NULL) {
 		printf("verifying token\n");
-		unsigned char *orig_sig = t->bank_sig;
+		unsigned char *orig_sig = malloc(t->sig_len);
+		memcpy(orig_sig, t->bank_sig, t->sig_len);
 		t->bank_sig = (unsigned char*)"AVERYSMALLAMOUNTOFPADDING"; //reset the message
-		unsigned char *buf = buffer_trans_tok(t, 200);
-		FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider-key.pem"), "r");
+		int buf_size = 256;
+		char *buf = buffer_trans_tok(t, &buf_size);
+		FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider.pem"), "r");
 		if(f != NULL) {
-			RSA* rsa = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
-			int s1 =  RSA_size(rsa);
-			if(RSA_verify(NID_sha1, buf, 200, orig_sig, &s1, rsa)) {
-				printf("VERIFY SUCCESS\n");
-				send_string(bio, "VALIDATION_SUCCESS");
+			X509 *x = PEM_read_X509(f, NULL, NULL, NULL);
+			EVP_PKEY *pkey = X509_get_pubkey(x);
+			if(contains_trans_tok(transactions, t)) {
+				if(verify_signed_data(buf, buf_size, orig_sig, t->sig_len, pkey)) {
+					printf("VERIFY SUCCESS\n");
+					if(!trans_tok_remove(transactions, t))
+						printf("DIDN'T REMOVE TRANSACTION\n");
+					send_string(bio, "VALIDATION_SUCCESS");
+				} else {
+					ssl_error("Could not create signature");
+					send_string(bio, "VALIDATION ERROR");
+				}
 			} else {
-				ssl_error("Could not create signature");
-				send_string(bio, "VALIDATION ERROR");
+				printf("Transaction not in list\n");
+				send_string(bio, "TRANSACTION NOT ON WHITELIST\n");
 			}
 		} else {
 			perror("Could not open private key file");
@@ -410,16 +430,21 @@ void verify_response(BIO *bio)
 
 struct trans_tok * create_token(char *username, int value)
 {	
-	//TODO get serial from trans_list
 	struct trans_tok *t = create_trans_tok(username, 1, value, (unsigned char*)"AVERYSMALLAMOUNTOFPADDING");
-	unsigned char *buf = buffer_trans_tok(t, 200);
+	while(contains_trans_tok(transactions, t)) {
+		//TODO random serials
+		t->serial += 1; //find a serial we can use
+	}
+	int buf_size = 256;
+	char *buf = buffer_trans_tok(t, &buf_size);
 	FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider-key.pem"), "r");
 	if(f != NULL) {
-		RSA* rsa = PEM_read_RSAPrivateKey(f, NULL, NULL, NULL);
-		unsigned char *sig = malloc(RSA_size(rsa));
-		int s1 =  RSA_size(rsa);
-		if(RSA_sign(NID_sha1, buf, 200, sig, &s1, rsa)) {
+		EVP_PKEY* privkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
+		int len = 0;
+		unsigned char *sig = sign_data(buf, buf_size, privkey, &len);
+		if(sig != NULL) {
 			t->bank_sig = sig;
+			t->sig_len = len;
 			return t;
 		} else {
 			ssl_error("Could not create signature");
@@ -446,9 +471,10 @@ void withdraw_response(BIO *bio, char *username)
 				struct trans_tok *t = create_token(username, r->value);
 				if(t != NULL) {
 					print_trans_tok(t);
-					if(send_trans_tok(bio, t) > 0)
+					if(send_trans_tok(bio, t) > 0) {
 						a->balance = a->balance - r->value;
-					else
+						add_trans(transactions, t);
+					} else
 						fprintf(stderr,"Trans Tok not sent, not deducting balance\n");
 				} else
 					fprintf(stderr, "Token creation fail\n");
@@ -462,6 +488,7 @@ void withdraw_response(BIO *bio, char *username)
 	}
 	printf("Finised withdraw\n");
 	free(r);
+	trans_tok_list_print(transactions);
 }
 
 void send_query_response(BIO *bio, char *username)

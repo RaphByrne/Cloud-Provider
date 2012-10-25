@@ -132,6 +132,30 @@ int send_u_string(BIO *bio, unsigned char* s, int len)
 	return send_char_buf(bio, s, len);
 }
 
+unsigned char *sign_data(char *data, size_t len, EVP_PKEY* key, int *sig_len) 
+{
+	EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+	EVP_SignInit(ctx, EVP_sha1());
+	EVP_SignUpdate(ctx, data, len);
+	unsigned char * sig = malloc(EVP_PKEY_size(key));
+	int tmplen = EVP_PKEY_size(key);
+	if(!EVP_SignFinal(ctx, sig,  &tmplen, key)) {
+		ssl_error("Signing");
+		return NULL;
+	}
+	*sig_len = tmplen;
+	return sig;
+}
+
+unsigned char *verify_signed_data(char *data, size_t data_len, unsigned char *orig_sig, size_t sig_len, EVP_PKEY *key)
+{
+	EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+	EVP_VerifyInit(ctx, EVP_sha1());
+	if(!EVP_VerifyUpdate(ctx, data, data_len))
+		ssl_error("Verify update");
+	return EVP_VerifyFinal(ctx, orig_sig, sig_len, key);
+}
+
 //len is length of return result
 unsigned char *digest_file(char* filename, int *md_len)
 {
@@ -203,15 +227,50 @@ int load_file(char *filename, const void *buf, int obj_size, int size)
 		return 0;
 }
 
+int decrypt_encrypt_file(char *filein, char *fileout, unsigned char *key, int do_crypt)
+{
+	FILE *in = fopen(filein, "r");
+	if(in == NULL) {
+		fprintf(stderr, "Could not open %s to encrypt/decrypt\n", filein);
+		return -1;
+	}
+	FILE *out = fopen(fileout, "w");
+	if(out == NULL) {
+		fprintf(stderr, "Could not open %s to encrypt/decrypt\n",fileout);
+		return -1;
+	}
+	unsigned char inbuf[1024];
+	unsigned char outbuf[1024 + EVP_MAX_BLOCK_LENGTH];
+	int inlen, outlen;
+	unsigned char iv[] = "0";
+	EVP_CIPHER_CTX ctx;
+	EVP_CIPHER_CTX_init(&ctx);
+	EVP_CipherInit_ex(&ctx, EVP_des_ede3_cbc(), NULL, key, iv, do_crypt); //do_crypt 1 for enc, 0 for dec
+	while((inlen = fread(inbuf, 1, 1024, in)) > 0) {
+		if(!EVP_CipherUpdate(&ctx, outbuf, &outlen, inbuf, inlen)) {
+			fprintf(stderr, "Cipher Update error on %s\n",filein);
+			ssl_error("Cipher update");
+			return -2;
+		}
+		fwrite(outbuf, 1, outlen, out);
+	}
+
+	if(!EVP_CipherFinal_ex(&ctx, outbuf, &outlen)) {
+		ssl_error("cipher final");
+		return -2;
+	}
+	fwrite(outbuf, 1, outlen, out);
+	fclose(in);
+	fclose(out);
+	return 1;
+}
+
 int send_file(BIO *bio, char* filename)
 {
 	int result = 0;
 	printf("opening file: %s\n",filename);
 	FILE *f = fopen(filename,"r");
 	if(f != NULL) {
-		//strip off local directories
-		if(strrchr(filename, '/') != NULL)
-			filename = strrchr(filename, '/')+1;
 
 		//check that the other guy can store our file
 		char *response = calloc(BUFSIZ, sizeof(char));
@@ -221,7 +280,7 @@ int send_file(BIO *bio, char* filename)
 				char *buf = calloc(BUFSIZ, sizeof(char));
 				while(feof(f) == 0) {
 					int num_bytes = fread(buf, sizeof(char), BUFSIZ, f);
-					printf("send %d bytes of %s\n",num_bytes, filename);
+					printf("sent %d bytes of %s\n",num_bytes, filename);
 					if(BIO_write(bio, buf, num_bytes) <= 0)
 						break;
 					memset(buf, 0, BUFSIZ);

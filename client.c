@@ -21,7 +21,7 @@
 #define	OPTLIST	""
 #define CERTPATH "certs"
 #define FILEPATH "files"
-#define TEMPPATH "tmp"
+#define TMPPATH "tmp"
 
 extern char *strdup(const char *str);
 //extern int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
@@ -286,7 +286,10 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 {
 	for(int i = 0; i < num_files; i++) {
 		char *filename = files[i];
-		long filesize = size_of_file(filename);
+		char *tmpname = string_cat(3,TMPPATH,"/",filename);
+		decrypt_encrypt_file(filename, tmpname, key, 1); //encrypt the file
+
+		long filesize = size_of_file(tmpname);
 		send_create_message(bio, ADD, filename, "", perms, filesize);
 		
 		//get the response
@@ -295,11 +298,11 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 			if(strncmp(res, "FILE_OK", strlen("FILE_OK")) == 0) {
 				//get and send the money
 				if(send_payment(bio, "127.0.0.1:1111", filesize)) {
-					if(send_file(bio, filename))
-						send_verification(bio, filename, key);
+					if(send_file(bio, tmpname))
+						send_verification(bio, tmpname, key);
 				}
 			} else
-				printf("FILE ADD ERROR ON %s: %s\n", filename, res);
+				printf("FILE ADD ERROR ON %s: %s\n", tmpname, res);
 			free(res);
 		}
 		//TODO encrypt_file(filename, outfile);
@@ -309,16 +312,19 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 void op_FETCH(BIO *bio, int num_files, char** files, unsigned char *key)
 {
 	for(int i = 0; i < num_files; i++) {
-		char * filename = files[i];
-		
+		char * filename = files[i];	
+
 		send_create_message(bio, FETCH, filename, "", 0, 0);
 		//need to wait for ok first. It has to check whether the file currently exists
 		struct message_client *m = calloc(1, sizeof(*m));
 		get_c_message(bio, m);
 		if(m->ctrl == FETCH) {
 			if(verify_remote_file(bio, filename, key)) {
+				char *tmpname = string_cat(3,TMPPATH,"/",filename);
+				get_file(bio, tmpname, m->file_perm, m->file_size);
+				
 				char *store_name = string_cat(3,FILEPATH,"/",m->name);
-				get_file(bio, filename, m->file_perm, m->file_size);
+				decrypt_encrypt_file(tmpname, store_name, key, 0); //encrypt the file
 				free(store_name);
 				printf("Remote file %s fetched to %s\n",m->name, filename);
 			} else

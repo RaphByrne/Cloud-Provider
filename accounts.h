@@ -38,3 +38,9 @@ struct t_list {
 	struct t_node *last;
 	int num;
 };
+
+struct t_list* init_trans_list();
+void add_trans(struct t_list *list, struct trans_tok* tok);
+int contains_trans_tok(struct t_list *list, struct trans_tok *tok);
+void trans_tok_list_print(struct t_list *list);
+int trans_tok_remove(struct t_list *list, struct trans_tok *tok);

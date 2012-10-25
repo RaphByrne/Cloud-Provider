@@ -28,7 +28,9 @@ xdr_trans_tok (XDR *xdrs, trans_tok *objp)
 		 return FALSE;
 	 if (!xdr_u_int (xdrs, &objp->value))
 		 return FALSE;
-	 if (!xdr_string (xdrs, &objp->bank_sig, 64))
+	 if (!xdr_string (xdrs, &objp->bank_sig, 256))
+		 return FALSE;
+	 if (!xdr_u_int (xdrs, &objp->sig_len))
 		 return FALSE;
 	return TRUE;
 }
@@ -50,8 +52,9 @@ struct trans_tok *create_trans_tok(char *payer, u_int serial, u_int value, unsig
 	strncpy(out->payer, payer, 100);
 	out->serial = serial;
 	out->value = value;
-	out->bank_sig = malloc(64);
-	memcpy(out->bank_sig, bank_sig, 64);
+	out->bank_sig = malloc(256);
+	memcpy(out->bank_sig, bank_sig, 256);
+	out->sig_len = 0;
 	printf("SUCCESSFULLY CREATED TRANS TOK\n");
 	return out;
 }
@@ -61,8 +64,7 @@ int trans_tok_equals(struct trans_tok *t1, struct trans_tok *t2)
 	if(strcmp(t1->payer, t2->payer) == 0)  {
 		if(t1->serial == t2->serial) { 
 			if(t1->value == t2->value) {
-				if(unsigned_string_equals(t1->bank_sig, 64, t2->bank_sig, 64))
-					return 1;
+				return 1;
 			}
 		}
 	}
@@ -105,16 +107,14 @@ int get_trans_tok(BIO* bio, struct trans_tok *t)
 	return result;
 }
 
-unsigned char* buffer_trans_tok(struct trans_tok *t, size_t size)
+unsigned char* buffer_trans_tok(struct trans_tok *t, int * size)
 {
-	char *buf = malloc(size);
-	XDR xdr;
-	xdrmem_create(&xdr, buf, size, XDR_ENCODE);
-	if(!xdr_trans_tok(&xdr, t)) {
-		perror("could not encode trans tok\n");
-		return NULL;
-	}
-	xdr_destroy(&xdr);
+	char *buf = malloc(*size);
+	snprintf(buf, *size, "%s%d%d%s", t->payer, t->serial, t->value, t->bank_sig);
+	*size = strlen(buf);
+	//if(size < 256) {
+		//printf("FUCKY %d\n", size);
+	//}
 	return buf;
 }
 

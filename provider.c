@@ -191,7 +191,7 @@ int verify_client(X509 *cert, char *username, char *pword)
 		if(verify_pword(username, pword) == 1)
 			result = 1;
 		else {
-			printf("Could no verify password of %s\n",username);
+			printf("Could not verify password of %s\n",username);
 			result = 0;
 		}
 		return result;
@@ -297,6 +297,8 @@ int add_file(BIO * out, char *username, char* filename, mode_t file_mask, long f
 	bool check_money = false;
 	char *userdir = USERDIR;
 	printf("userdir: %s\n",userdir);
+	
+	
 	char *user_filename = string_cat(3,userdir,"/", filename);
 	int result = 1;
 	//check if file exists and report to client
@@ -597,7 +599,7 @@ int main(int argc, char **argv) {
 				strncpy(pword, mess->pword, strlen(mess->pword));
 				//xdr_free((xdrproc_t)xdr_message_client, (char *)mess);
 				
-				if(verify_client(client_cert, username, pword)) {
+				if(verify_client(client_cert, username, pword) == 1) {
 					memset(pword, 0, strlen(pword));
 					free(pword);
 					printf("VERIFIED SUCCESSFULLY\n");
@@ -640,20 +642,21 @@ int main(int argc, char **argv) {
 						xdr_free((xdrproc_t)xdr_message_client, (char *)mess);
 						m = calloc(1,sizeof(*m));
 					}
-					printf("Client closed the connect\n");
+					if(!exit)
+						printf("Client closed the connect\n");
+					else
+						printf("Aborted due to untrustworthy client\n");
 					free(m);
 				} else {
 					printf("COULD NOT VERIFY CLIENT\n");
+					send_string(out, "COULD NOT VERIFY\n");
 				}
 				free(username);
 			} else {
 				printf("COULD NOT VERIFY CLIENT\n");
 				ssl_error("client verification");
-				//message = "CONN_BAD";
-				//BIO_write(out, message, strlen(message)+1);
 			}	
 			//SSL_free(&tmpssl);
-			BIO_free(out);
 		} else {
 			printf("HANDSHAKE FAILED\n");
 		}

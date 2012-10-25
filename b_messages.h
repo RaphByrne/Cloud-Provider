@@ -26,6 +26,7 @@ struct trans_tok {
 	u_int serial;
 	u_int value;
 	char *bank_sig;
+	u_int sig_len;
 };
 typedef struct trans_tok trans_tok;
 
@@ -36,7 +37,7 @@ void print_trans_tok(struct trans_tok *t);
 int get_trans_tok(BIO* bio, struct trans_tok *t);
 int send_trans_tok(BIO *bio, struct trans_tok *t);
 int send_create_trans_tok(BIO *bio, char* payer, u_int serial, u_int value, unsigned char *sig);
-unsigned char* buffer_trans_tok(struct trans_tok *t, size_t size);
+unsigned char* buffer_trans_tok(struct trans_tok *t, int * size);
 int send_trans_req(BIO *bio, struct trans_req* r);
 int send_create_trans_req(BIO *bio, char* payer, u_int value);
 int get_trans_req(BIO* bio, struct trans_req *r);

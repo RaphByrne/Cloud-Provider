@@ -44,8 +44,8 @@ void op_B_QUERY(BIO *bio);
 
 static void usage(int status)
 {
-	fprintf(stderr, "Usage: %s [options]\n", argv0);
-	fprintf(stderr, "options are:\n");
+	fprintf(stderr, "Usage: %s SERVER_ADDRESS OPERATION <FILES>\n", argv0);
+	fprintf(stderr, "Where:\n \tSERVER_ADDRESS is the address of the bank or provider\n\tOPERATION for Provider: ADD, DELETE, REGISTER, UPDATE, FETCH, LIST, VERIFY\n\tOPERATION for Bank: QUERY, REGISTER\n\t\tIf REGISTER <FILES> should be your desired USERNAME PASSWORD\n\t\tOtherwise <FILES> is one or more files to perform the desired operation on\n\n\tYou will be prompted for your username and password when contacting the server when not REIGSTER\n");
 
 	exit(status);
 }
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
 	argv += optind;
 	argc -= optind;
 	//  CHECK THAT ALL PROVIDED ARGUMENTS WERE VALID
-	if(argc < 3)
+	if(argc < 2)
 		usage(1);
 	
 	//get the inputs
@@ -120,19 +120,19 @@ int main(int argc, char **argv) {
 			printf("WTF\n");
 			exit(1);
 		}
-		printf("Please enter your cloud-provider username: ");
-		char *username = malloc(100); //TODO not safe? might overflow this buffer
-		scanf("%s",username);
-		char *tmp = getpass("Enter Password:");
-		char *pword = strdup(tmp);
 		if(ctrl == REGISTER) {
 			printf("Registering\n");
-			if(op_REGISTER(bio, username, pword) > 0) {
+			if(op_REGISTER(bio, argv[0], argv[1]) > 0) {
 				printf("REGISTRY SUCCESS\n");
 			} else {
 				printf("REGISTRY FAIL\n");
 			}
 		} else { 
+			printf("Please enter your cloud-provider username: ");
+			char *username = malloc(100); //TODO not safe? might overflow this buffer
+			scanf("%s",username);
+			char *tmp = getpass("Enter Password:");
+			char *pword = strdup(tmp);
 			if(op_LOGIN(bio, username, pword)) {
 				unsigned char* key = create_v_key(username, pword);
 				

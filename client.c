@@ -101,27 +101,13 @@ int main(int argc, char **argv) {
 	//get the inputs
 	char *conn_string = argv[0];
 
-	//get the username	
-	char *username = argv[1];
-	/* //check their private key
-	int result = 0;
-	if((result = test_privkey(username)) != 1) {
-		if(result == -1)
-			printf("PRIVATE KEY FOR %s DOES NOT EXIST\n",username);
-		else
-			printf("CANNOT LOAD UNENCRYPTED PRIVATE KEY\n");
-		exit(1);
-	}
-	*/
-
-
-	char *operation = argv[2];
+	char *operation = argv[1];
 	enum message_c_ctrl ctrl = string_to_ctrl(operation); //TODO check this
 	printf("Got operation: %s\n",operation);
 	printf("Doing: %s\n", ctrl_to_string(ctrl));	
 	
-	argv += 3;
-	argc -= 3;
+	argv += 2;
+	argc -= 2;
 	char **files = argv;
 	int num_files = argc;
 
@@ -134,6 +120,9 @@ int main(int argc, char **argv) {
 			printf("WTF\n");
 			exit(1);
 		}
+		printf("Please enter your cloud-provider username: ");
+		char *username = malloc(100); //TODO not safe? might overflow this buffer
+		scanf("%s",username);
 		char *tmp = getpass("Enter Password:");
 		char *pword = strdup(tmp);
 		if(ctrl == REGISTER) {
@@ -297,7 +286,10 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 		if(res != NULL) {
 			if(strncmp(res, "FILE_OK", strlen("FILE_OK")) == 0) {
 				//get and send the money
-				if(send_payment(bio, "127.0.0.1:1111", filesize)) {
+				printf("Please enter address of cloud-bank: ");
+				char *bank_add = malloc(100); //TODO not safe? might overflow this buffer
+				scanf("%s",bank_add);
+				if(send_payment(bio, bank_add, filesize)) {
 					if(send_file(bio, tmpname))
 						send_verification(bio, tmpname, key);
 				}
@@ -305,7 +297,7 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 				printf("FILE ADD ERROR ON %s: %s\n", tmpname, res);
 			free(res);
 		}
-		//TODO encrypt_file(filename, outfile);
+		remove(tmpname);
 	 }
 }
 
@@ -324,9 +316,10 @@ void op_FETCH(BIO *bio, int num_files, char** files, unsigned char *key)
 				get_file(bio, tmpname, m->file_perm, m->file_size);
 				
 				char *store_name = string_cat(3,FILEPATH,"/",m->name);
-				decrypt_encrypt_file(tmpname, store_name, key, 0); //encrypt the file
+				decrypt_encrypt_file(tmpname, store_name, key, 0); //decrypt the file
 				free(store_name);
 				printf("Remote file %s fetched to %s\n",m->name, filename);
+				remove(tmpname);
 			} else
 				printf("Could not verify %s\n", filename);
 		} else
@@ -383,6 +376,7 @@ int compare_hashes(unsigned char *key, unsigned char *enc_hash, int enc_len, uns
 int verify_remote_file(BIO *bio, char *filename, unsigned char *key)
 {
 	int result = 0;
+	printf("Verifying %s\n",filename);
 	if(send_create_message(bio, VERIFY, filename, "", 0, 0) == 1) {
 		char *response = get_str_message(bio);
 		if(strncmp(response, "VERIFY_FILE_EXISTS", strlen("VERIFY_FILE_EXISTS")) == 0) {
@@ -444,9 +438,4 @@ void op_B_QUERY(BIO *bio)
 	} else {
 		printf("Message send error\n");
 	}
-}
-
-void op_B_WITHDRAW(BIO *bio, char *username, u_int amount)
-{
-
 }

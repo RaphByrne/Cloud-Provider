@@ -33,7 +33,6 @@
 extern char *strdup(const char *str);
 
 char *argv0 = NULL;
-char *password;
 int num_users = 0;
 
 
@@ -57,30 +56,6 @@ void init_SSL()
 	OpenSSL_add_all_digests();
 }
 
-void load_password(char* password_file)
-{
-	char *password2 = malloc(sizeof(char)*PASS_SIZE);
-	FILE *f = fopen(password_file, "r");
-	if(f == NULL) {
-		fprintf(stderr, "Password file %s COULD NOT BE OPENED\n", password_file);
-		perror("");
-		exit(1);
-	}
-	fgets(password2, PASS_SIZE, f);
-	//remove the newline
-	char *newline = strchr(password2,'\n');
-	*newline = '\0';
-	password = password2;
-}
-
-int password_callback(char *buf, int size, int rwflag, void *userdata)
-{
-	if(size < strlen(password)) {
-		return 0;
-	}
-	strcpy(buf, password);
-	return strlen(buf);
-}
 
 int mk_user_dir(char *username)
 {
@@ -294,7 +269,6 @@ int verify_token(struct trans_tok *t)
 //read and store a file from the stream
 int add_file(BIO * out, char *username, char* filename, mode_t file_mask, long filesize)
 {
-	bool check_money = false;
 	char *userdir = USERDIR;
 	printf("userdir: %s\n",userdir);
 	
@@ -517,12 +491,6 @@ int main(int argc, char **argv) {
 	SSL_CTX *ctx = (SSL_CTX *)SSL_CTX_new(SSLv23_server_method());
 	SSL *ssl;
 
-	//TODO THIS IS REALLY BAD, READING THE PRIVKEY PASSWORD FROM A FILE
-	if(argc > 1) {
-		char *pass_file = argv[1];
-		load_password(pass_file);
-		SSL_CTX_set_default_passwd_cb(ctx, &password_callback);
-	}
 
 	printf("LOADING CA CERT\n");
 	//load our ca certificate

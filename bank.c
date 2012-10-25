@@ -27,7 +27,6 @@
 
 
 char *argv0 = NULL;
-char *password;
 int num_users = 0;
 
 
@@ -52,32 +51,6 @@ void init_SSL()
 	OpenSSL_add_all_algorithms();
 	OpenSSL_add_all_digests();
 }
-
-void load_password(char* password_file)
-{
-	char *password2 = malloc(sizeof(char)*PASS_SIZE);
-	FILE *f = fopen(password_file, "r");
-	if(f == NULL) {
-		fprintf(stderr, "Password file %s COULD NOT BE OPENED\n", password_file);
-		perror("");
-		exit(1);
-	}
-	fgets(password2, PASS_SIZE, f);
-	//remove the newline
-	char *newline = strchr(password2,'\n');
-	*newline = '\0';
-	password = password2;
-}
-
-int password_callback(char *buf, int size, int rwflag, void *userdata)
-{
-	if(size < strlen(password)) {
-		return 0;
-	}
-	strcpy(buf, password);
-	return strlen(buf);
-}
-
 
 int verify_pword(char *username, char *pword)
 {
@@ -256,12 +229,6 @@ int main(int argc, char **argv) {
 	SSL_CTX *ctx = (SSL_CTX *)SSL_CTX_new(SSLv23_server_method());
 	SSL *ssl;
 
-	//TODO THIS IS REALLY BAD, READING THE PRIVKEY PASSWORD FROM A FILE
-	if(argc > 1) {
-		char *pass_file = argv[1];
-		load_password(pass_file);
-		SSL_CTX_set_default_passwd_cb(ctx, &password_callback);
-	}
 
 	printf("LOADING CA CERT\n");
 	//load our ca certificate
@@ -274,7 +241,7 @@ int main(int argc, char **argv) {
 
 	printf("LOADING SERVER CERT\n");
 	//load our certificate used to send files
-	if(SSL_CTX_use_certificate_file(ctx, string_cat(3,CERTPATH, "/", "provider.pem"), SSL_FILETYPE_PEM) < 1)
+	if(SSL_CTX_use_certificate_file(ctx, string_cat(3,CERTPATH, "/", "bank.pem"), SSL_FILETYPE_PEM) < 1)
 	{
 		ssl_error("failed to load server cert");
 		exit(1);
@@ -282,7 +249,7 @@ int main(int argc, char **argv) {
 
 	printf("LOADING PRIVATE KEY\n");
 	//load our private key
-	if(SSL_CTX_use_PrivateKey_file(ctx, string_cat(3, CERTPATH,"/", "provider-key.pem"), SSL_FILETYPE_PEM) < 1)
+	if(SSL_CTX_use_PrivateKey_file(ctx, string_cat(3, CERTPATH,"/", "bank-key.pem"), SSL_FILETYPE_PEM) < 1)
 	{
 		ssl_error("failed to load private key");
 		exit(1);
@@ -401,7 +368,7 @@ void verify_response(BIO *bio)
 		t->bank_sig = (unsigned char*)"AVERYSMALLAMOUNTOFPADDING"; //reset the message
 		int buf_size = 256;
 		char *buf = buffer_trans_tok(t, &buf_size);
-		FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider.pem"), "r");
+		FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank.pem"), "r");
 		if(f != NULL) {
 			X509 *x = PEM_read_X509(f, NULL, NULL, NULL);
 			EVP_PKEY *pkey = X509_get_pubkey(x);
@@ -438,7 +405,7 @@ struct trans_tok * create_token(char *username, int value)
 	}
 	int buf_size = 256;
 	char *buf = buffer_trans_tok(t, &buf_size);
-	FILE *f = fopen(string_cat(3, CERTPATH,"/", "provider-key.pem"), "r");
+	FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank-key.pem"), "r");
 	if(f != NULL) {
 		EVP_PKEY* privkey = PEM_read_PrivateKey(f, NULL, NULL, NULL);
 		int len = 0;

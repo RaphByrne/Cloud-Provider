@@ -29,6 +29,8 @@
 char *argv0 = NULL;
 int num_users = 0;
 
+struct a_list *accounts;
+#define ACCOUNTS_FILE "accounts"
 
 void send_query_response(BIO *bio, char *username);
 void withdraw_response(BIO *bio, char *username);
@@ -152,6 +154,15 @@ int add_user(char *username, char *pword)
 	memset(phash, 0, strlen(phash));
 	free(salt);
 	//free(phash);
+	//THIS IS MAINLY FOR TESTING (SO WE DON'T HAVE TO RE-REGISTER EVERYONE
+	f = fopen(ACCOUNTS_FILE,"a");
+	if(f != NULL) {
+		if(fprintf(f,"%s %d\n", username, 5) > 0) //give everyone 5 to start (mainly for testing)
+			result = 1;
+	} else
+		printf("Could not open ACCOUNTS_FILE to add a user");
+	fclose(f);
+	//TESTING PORTION OVER
 	return result;
 }
 
@@ -169,8 +180,6 @@ void register_user(BIO *bio, char *username, char *pword)
 	free(message);
 }
 
-struct a_list *accounts;
-#define ACCOUNTS_FILE "accounts"
 
 void init_accounts()
 {
@@ -294,6 +303,7 @@ int main(int argc, char **argv) {
 				get_c_message(out, mess);
 				if(mess->ctrl == REGISTER) {
 					register_user(out, mess->name, mess->pword);
+					init_accounts(); //we will have updated the file (FOR TESTING PURPOSES)
 					xdr_free((xdrproc_t)xdr_message_client, (char *)mess);
 					continue;
 				}

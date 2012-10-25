@@ -38,8 +38,8 @@ void verify_response(BIO *bio);
 
 static void usage(int status)
 {
-	fprintf(stderr, "Usage: %s [options]\n", argv0);
-	fprintf(stderr, "options are:\n");
+	fprintf(stderr, "Usage: %s <PORT>\n", argv0);
+	fprintf(stderr, "Where:\t<PORT> is the port for this server to operate on\n");
 
 	exit(status);
 }

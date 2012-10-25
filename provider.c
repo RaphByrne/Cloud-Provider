@@ -34,14 +34,14 @@ extern char *strdup(const char *str);
 
 char *argv0 = NULL;
 int num_users = 0;
-
+char *bank_add;
 
 void verify_file(BIO *bio, char *username, char* filename);
 
 static void usage(int status)
 {
-	fprintf(stderr, "Usage: %s [options]\n", argv0);
-	fprintf(stderr, "options are:\n");
+	fprintf(stderr, "Usage: %s <PORT> <BANK_ADD>\n", argv0);
+	fprintf(stderr, "Where\t<PORT> is the port for this server to operate on and\n\t<BANK_ADD> is the address of the cloud-bank\n");
 
 	exit(status);
 }
@@ -235,7 +235,7 @@ int delete_file(BIO *bio, char* username, char* filename)
 int verify_token(struct trans_tok *t)
 {
 	//TODO need to log in to bank
-	struct ssl_connection *conn = connect_to("127.0.0.1:1111",CERTPATH,"ca-cert.pem","provider.pem","provider-key.pem");
+	struct ssl_connection *conn = connect_to(bank_add,CERTPATH,"ca-cert.pem","provider.pem","provider-key.pem");
 	if(conn != NULL) {
 		BIO *bio = conn->bio;
 		int result = 0;
@@ -484,10 +484,11 @@ int main(int argc, char **argv) {
 	argv += optind;
 	argc -= optind;
 	//  CHECK THAT ALL PROVIDED ARGUMENTS WERE VALID
-	if(argc < 1)
+	if(argc < 2)
 		usage(1);
 	
 	char *port = argv[0];
+	char *bank_add = argv[1];
 
 	SSL_CTX *ctx = (SSL_CTX *)SSL_CTX_new(SSLv23_server_method());
 	SSL *ssl;

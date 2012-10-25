@@ -1,0 +1,75 @@
+Setup:
+1. Run createBank, createProvider and createClient in the locations your wish to run
+each component. 
+
+These set up the directories and compile the required binary for each,
+placing it in the bank, provider or client directory.
+
+
+2. Run initProviderAccount on the machine you have installed the client. 
+
+This will create the provider's bank account. This is important and require so that the provider can
+verify cloud-dollars sent to it.
+
+
+3. Invoke the provider and bank binaries to being their services.
+
+This is done from the 'provider' and 'bank' directories on the machines you have installed them
+on. You will have to provide a port for them to operate on.
+
+
+4. Run initClientAccounts <PROVIDER_ADD> <BANK_ADD> <USERNAME> <PASSWORD>
+
+Where the addresses are the addresses of the provider and bank respectively in <IP>:<PORT> form.
+<USERNAME> and <PASSWORD> register the desired username and password on both the bank and provider
+servers. Registering a new account with the bank gives you a starting balance of 20 cloud-dollars.
+Registering a new account with the provider initialises a blank directory for the users files.
+
+
+The components of the program are now ready to run. Client execution detailed below.
+
+Execution:
+The usage of 'client' is
+client <ADDRESS> <OPERATION> [args]
+
+<ADDRESS> - the address of the server you wish to contact in <IP>:<PORT> form.
+<OPERATION> - 	one of the following for the provider: ADD, DELETE, UPDATE, FETCH, LIST, VERIFY, REGISTER
+		one of the following for the bank: QUERY, REGISTER
+
+Upon connecting to a server you will be requested for a username and password. This must be the same as an
+account you have previously registered.
+
+The REGISTER command is mainly included for convenience during testing as it accepts a password from the
+command line without disabling echoing in any way. Ideally this would be changed to a more secure registration
+method, although this could be out of band.
+
+Operations:
+Provider:
+ADD 		- [args] should be one or more files you wish to add to the provider. Files will be encrypted
+		before sending.
+DELETE		- [args] should be one or mroe files you wish to delete from the provider
+UPDATE 		- [args] should be one or more files you wish to update
+FETCH		- [args] should be one or more files you wish to retrieve. Files must be verified first
+LIST		- lists the files you have remotely stored
+VERIFY		- [args] should be one or more files you wish to verify. This will return a message stating whether
+		or not the remote file has been changed in any way.
+REGISTER	- [args] should be a single username and password, space separated.
+
+Bank:
+QUERY		- sends a request to the bank for your balance
+REGISTER	- the same as for the provider
+
+No direct withdrawal operation is given, it must be done as part of a file ADD/UPDATE operation when
+contacting the provider, then payment is directly given to the provider. This is partially for security
+but also because I have not implemented any form of session resumption for failed writes due to
+disconnections etc. If money is withdrawn from the bank and not sent to the server and/or the server
+cannot verify the money it is not saved by the client in any way and is lost. Ideally received money
+tokens should be kept by the client and reused on subsiquent attempts to upload the file (or a file
+of the same price).
+
+Protocol Detail:
+
+Acknowledgements:
+http://www.openssl.org/docs/ - many openssl examples
+openssl demos - shipped with openssl, more examples
+http://perfec.to/gensalt/ - used for salt generation when encrypting passwords

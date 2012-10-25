@@ -138,7 +138,7 @@ int user_exists(char *username)
 int add_user(char *username, char *pword)
 {
 	printf("Adding user %s\n", username);
-	char *salt = gensalt(NULL, NULL);
+	char *salt = gensalt(NULL, get_rand);
 	char *phash = crypt(pword, salt); //TODO not using a great random function here
 	//memset(pword, 0, strlen(pword)); //ZEROS THE PASSWORD AFTER HASHING IT
 	chmod(PFILE, S_IWUSR); //let us write to the PFILE

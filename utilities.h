@@ -35,6 +35,7 @@ struct ssl_connection {
 struct ssl_connection * connect_to(char *address, char *certpath, char *cacert, char *cert, char *privkey);
 #endif
 
+int get_rand(int n);
 int op_LOGIN(BIO *bio, char *username, char *pword);
 int unsigned_string_equals(unsigned char *s1, int l1, unsigned char *s2, int l2);
 char * string_cat(int n, ...);

@@ -1,5 +1,19 @@
 #include "utilities.h"
 
+int get_rand(int n)
+{
+	/*
+	FILE *f = fopen("/dev/random", "r");
+	if(f != NULL) {
+		int *seed = 0;
+		fread(seed, sizeof(int), 1, f);
+		srandom(seed);
+		
+	}
+	*/
+	return random()%n;
+}
+
 int op_LOGIN(BIO *bio, char *username, char *pword)
 {
 	int result = 0;

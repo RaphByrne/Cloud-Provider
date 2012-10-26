@@ -64,10 +64,8 @@ void print_hash(unsigned char* hash, int len)
 //naive hashing function. Only really used to make verification keys
 unsigned char *sha_hash(unsigned char* data, long len)
 {
-	printf("Computing sha1 hash of %s\n",data);
 	unsigned char* out = calloc(160, sizeof(unsigned char));
 	SHA1(data, len, out);
-	print_hash(out, len);
 	return out;
 }
 
@@ -428,8 +426,6 @@ char *get_str_message(BIO *bio)
 		//free(buf);
 		buf = NULL;
 	}
-	if(buf != NULL)
-		fprintf(stderr, "got message %s\n", buf);
 	return buf;
 }
 

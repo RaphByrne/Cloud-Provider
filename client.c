@@ -288,7 +288,7 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 				printf("FILE ADD ERROR ON %s: %s\n", tmpname, res);
 			free(res);
 		}
-		remove(tmpname);
+		//remove(tmpname);
 	 }
 }
 

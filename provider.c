@@ -40,8 +40,8 @@ void verify_file(BIO *bio, char *username, char* filename);
 
 static void usage(int status)
 {
-	fprintf(stderr, "Usage: %s <PORT> <BANK_ADD>\n", argv0);
-	fprintf(stderr, "Where\t<PORT> is the port for this server to operate on and\n\t<BANK_ADD> is the address of the cloud-bank\n");
+	fprintf(stderr, "Usage: %s <ADDR> <BANK_ADD>\n", argv0);
+	fprintf(stderr, "Where\t<ADDR> is the address and port for this server to operate on in <ADDR>:<PORT> format and\n\t<BANK_ADD> is the address of the cloud-bank\n");
 
 	exit(status);
 }

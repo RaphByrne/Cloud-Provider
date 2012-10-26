@@ -1,5 +1,7 @@
 #include "utilities.h"
 
+//Experimental random function used to generate more random salts with gensalt.c.
+//Couldn't get it working in the end so it just uses random()
 int get_rand(int n)
 {
 	/*
@@ -7,7 +9,7 @@ int get_rand(int n)
 	if(f != NULL) {
 		int *seed = 0;
 		fread(seed, sizeof(int), 1, f);
-		srandom(seed);
+		srandom(*seed);
 		
 	}
 	*/

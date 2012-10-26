@@ -15,7 +15,10 @@ verify cloud-dollars sent to it.
 3. Invoke the provider and bank binaries to being their services.
 
 This is done from the 'provider' and 'bank' directories on the machines you have installed them
-on. You will have to provide a port for them to operate on.
+on. You will have to provide a port for them to operate on. You must provider an IP address and PORT
+for each server in the form <ADDR>:<PORT>. Each server will only be able to communicate to and from
+this address. This means that each server must be run on different machines as they cannot use the
+loopback address to communicate locally as well as accept communications from an external source.
 
 
 4. Run initClientAccounts <PROVIDER_ADD> <BANK_ADD> <USERNAME> <PASSWORD>
@@ -30,11 +33,15 @@ The components of the program are now ready to run. Client execution detailed be
 
 Execution:
 The usage of 'client' is
-client <ADDRESS> <OPERATION> [args]
+client [options] <ADDRESS> <OPERATION> [args]
 
 <ADDRESS> - the address of the server you wish to contact in <IP>:<PORT> form.
 <OPERATION> - 	one of the following for the provider: ADD, DELETE, UPDATE, FETCH, LIST, VERIFY, REGISTER
 		one of the following for the bank: QUERY, REGISTER
+[options]
+
+-e : turns on file encryption when adding/fetching files on the provider server. If you ADD with -e you must
+FETCH with -e!
 
 Upon connecting to a server you will be requested for a username and password. This must be the same as an
 account you have previously registered.
@@ -68,6 +75,90 @@ tokens should be kept by the client and reused on subsiquent attempts to upload 
 of the same price).
 
 Protocol Detail:
+All communication two and from any two endpoints is secured using an openssl SSL connection. Each application
+has their own set of public/private keys and certificates. These have been signed by a dummy CA certificate
+that is self signed and created by me. This CA certificate (ca-cert.pem) is used to verify the certificates
+given during the SSL connection, ensuring to the client that they have connected to the true provider and
+bank servers. In reality these certificates would have to be issued by the CA by anyone wishing to start
+a service, preventing pretenders from duping clients.
+
+The verification is bi-directional so that the bank/provider can have a reasonable assurance
+that they are talking to a verified client application. Although of course as the client application would
+be widely distributed and hence their certificates readily available doing a bi-directional check at least
+protects against random attacks/polling attacks.
+
+The SSL connection also protects all user/server information that is transmitted across the network as
+it is encrypted as normally via an SSL key exchange etc. Specifically this protects user's passwords, 
+files, money tokens and money requests.
+
+
+Once connected to either server the client must enter a username and password which is checked against
+enshrouded passwords in a password file. During a REGISTER operation the passwords are also salted, the
+salts are (pseudo)randomly generated. The users password is also used in conjunction with other user data to
+generate a verification key. Password authentication prevents users from access others' files and vice versa.
+
+
+The verification key is used for file encryption and file verification. It is generated using a combination of
+the user's username and password. This is then hashed out 160 bits using the sha1 hashing algorithm.
+
+File encryption of sent user files can be encrypted (using the -e flag as above) before being sent. This is
+done using the verification key described above. Currently the file encryption doesn't work correctly on the lab
+machines. It is recommended that you do not use the '-e' flag. The data is mostly decrypted properly but time constraints
+have prevented me from completely fixing this function. If it did would it would be using triple des encryption with
+cipher block chaining. Chosen for its security and variable key length.
+
+File verificiation is done by the following process:
+1) When sending a file to the provider a sha512 message digest of the file is computed and then encrypted with the 
+user's verification key.
+2) The file and the encrypted digest is sent to the server
+3) When fetching a file the user requests the encrypted digest that it uploaded and a new digest computed by the server.
+4) The server computes the new digest and sends both back to the user
+5) The user decrypts the digest it previously sent and compares it to the new one received from the server. If they match
+then the file been successfully verified!
+
+This method does not require that the user have any additional information (other than their verification key) about
+the file to verify it. If the file had been changed then the digest sent back by the server would be different to the
+original encrypted one and hence could be detected. The server also cannot send back the original hash as it has been
+encrypted.
+
+
+Payment verification is done via digital cheques or "transaction tokens" as they are called in my application. The
+cloud-bank acts as a payment authorisation service and holds all funds.
+
+The request/verification process is as follows:
+1) When a user wishes to add a file to the provider its length is first calculated and an appropriate amount of
+cloud-dollars needed is computed. 
+2) This amount is bundled into a transaction request and sent to the cloud-bank.
+3) The cloud-bank checks the request against the user's account and determines whether they have the required
+funds to make the transaction.
+4) If the required funds exist a transaction token is created is sent back to the user and the transaction is
+logged in the cloud-bank's whitelist. The funds are not withdrawn at this point.
+5) The user sends the token to the provider
+6) The provider immediately attempts to verify the token and sends it to the bank
+7) If the token given by any user (provider or user) is in the transaction whitelist (i.e. issued by this bank)
+then the funds are withdrawn from the payer's account into the payee's account and the token is removed from
+the whitelist. Revoking it.
+
+I had also originally intended to verify the tokens using signatures created using the bank's private key which
+would ensure that only that particular bank as verified by the CA could have issued the token and can verify
+its contents. Due to time constaints the implementation of this proved to be infeasible.
+
+
+Known Vulnerabilities:
+The file verification key currently can be discovered by the provider as it is just generated from the user's 
+username and password, which are sent to the server. Ideally the user should have a separate key for file
+verification and encryption that cannot be derived from information sent to the server. Although some protections
+exist due to user passwords being enshrouded someone spoofing a server could easily get a user's password which
+would allow them access to their data and not just access to their provider account. Due to time constraints I was
+unable to develop a satisfactory method of creating a verification key that didn't involve making the user
+remember an additional password which may be found inconvenient and bypassed by users by just using the same password
+for both their account and verification, nullfying the security added.
+
+Tokens are not kept by the user and/or provider as I have not implemented any kind of session resumption so currently
+simple network disconnections during file transfers/money requests would lose the token forever. This could be fixed
+by having the provider/user hold onto already withdrawn tokens and attempt to reuse them if a file transfer can not
+be completed. Another option would be for the bank to re-issue tokens if the amount required equals the amount already
+produced. This could be done until the token has been revoked by being "cashed in".
 
 Acknowledgements:
 http://www.openssl.org/docs/ - many openssl examples

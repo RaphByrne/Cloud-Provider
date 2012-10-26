@@ -34,12 +34,12 @@ struct a_list *accounts;
 
 void send_query_response(BIO *bio, char *username);
 void withdraw_response(BIO *bio, char *username);
-void verify_response(BIO *bio);
+void verify_response(BIO *bio, char *payee);
 
 static void usage(int status)
 {
-	fprintf(stderr, "Usage: %s <PORT>\n", argv0);
-	fprintf(stderr, "Where:\t<PORT> is the port for this server to operate on\n");
+	fprintf(stderr, "Usage: %s <ADDR>\n", argv0);
+	fprintf(stderr, "Where\t<ADDR> is the address and port for this server to operate on in <ADDR>:<PORT> format\n");
 
 	exit(status);
 }
@@ -337,7 +337,7 @@ int main(int argc, char **argv) {
 									withdraw_response(out, username);
 									break;
 								case B_VERIFY :
-									verify_response(out);
+									verify_response(out, username);
 									break;
 								default :
 									printf("UNKNOWN CLIENT COMMAND\n");
@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-void verify_response(BIO *bio)
+void verify_response(BIO *bio, char* payee)
 {
 	struct trans_tok *t = calloc(1, sizeof *t);
 	get_trans_tok(bio, t);
@@ -389,9 +389,16 @@ void verify_response(BIO *bio)
 				//verify_signed_data(buf, buf_size, orig_sig, orig_sig_len, pkey)
 					printf("VERIFY SUCCESS\n");
 					if(!trans_tok_remove(transactions, t))
-						printf("DIDN'T REMOVE TRANSACTION\n");	
-					send_string(bio, "VALIDATION_SUCCESS");
-				
+						printf("DIDN'T REMOVE TRANSACTION\n");
+					//transfer the funds
+					struct account *payer_acc = account_get(accounts, t->payer);
+					if(payer_acc->balance >= t->value) {
+						payer_acc->balance = payer_acc->balance - t->value;
+						struct account *payee_acc = account_get(accounts, payee);
+						payee_acc->balance += t->value;
+						send_string(bio, "VALIDATION_SUCCESS");
+					} else
+						send_string(bio, "INSUFFICIENT FUNDS");		
 				/* THIS HAS BEEN REMOVED BECAUASE I CAN'T IMPLEMENT IT
 				} else {
 					ssl_error("Could not create signature");
@@ -462,7 +469,6 @@ void withdraw_response(BIO *bio, char *username)
 				if(t != NULL) {
 					print_trans_tok(t);
 					if(send_trans_tok(bio, t) > 0) {
-						a->balance = a->balance - r->value;
 						add_trans(transactions, t);
 					} else
 						fprintf(stderr,"Trans Tok not sent, not deducting balance\n");

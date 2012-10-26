@@ -35,7 +35,7 @@ xdr_message_client (XDR *xdrs, message_client *objp)
 
 struct message_client * message_create(enum message_c_ctrl ctrl, char* name, char*pword, int file_perm, long file_size)
 {
-	printf("CREATING MESSAGE\n");
+	//printf("CREATING MESSAGE\n");
 	struct message_client *m = calloc(1, sizeof *m);
 	m->ctrl = ctrl;
 	if(name != NULL) {
@@ -51,12 +51,13 @@ struct message_client * message_create(enum message_c_ctrl ctrl, char* name, cha
 		m->pword = NULL;
 	m->file_perm = file_perm;
 	m->file_size = file_size;
-	printf("SUCCESSFULLY CREATED MESSAGE\n");
+	//printf("SUCCESSFULLY CREATED MESSAGE\n");
 	return m;
 }
 
 #define NUMVALS 13
 
+//get the ctrl enum from a ctrl enum
 int string_to_ctrl(char *s)
 {
 	enum message_c_ctrl vals[NUMVALS] = {ADD, DELETE, UPDATE, VERIFY, LIST, FETCH, FETCH_FAIL, LOGIN, LOGOUT, REGISTER, B_QUERY, B_WITHDRAW, B_VERIFY};
@@ -69,6 +70,7 @@ int string_to_ctrl(char *s)
 	return -1;
 }
 
+//get the string representation of a ctrl enum
 char *ctrl_to_string(enum message_c_ctrl c)
 {
 	switch (c) {
@@ -102,6 +104,7 @@ char *ctrl_to_string(enum message_c_ctrl c)
 	return strdup("UNKNOWN");
 }
 
+//print a message
 void message_print_c(struct message_client* m)
 {
 	if(m == NULL) {

@@ -28,6 +28,7 @@
 
 char *argv0 = NULL;
 int num_users = 0;
+bool dflag;
 
 struct a_list *accounts;
 #define ACCOUNTS_FILE "accounts"
@@ -45,6 +46,8 @@ static void usage(int status)
 }
 
 
+//initialise some openssl stuff
+//load libraries, error strings etc.
 void init_SSL() 
 {
 	SSL_library_init();
@@ -54,26 +57,24 @@ void init_SSL()
 	OpenSSL_add_all_digests();
 }
 
+//verify "username"'s password 'pword' against their password
+//in the password file
 int verify_pword(char *username, char *pword)
 {
 	chmod(PFILE, S_IRUSR); //let us read the PFILE
 	FILE *f = fopen(PFILE, "r");
 	if(f != NULL) {
-		printf("Opened password file\n");
 		char *line = calloc(BUFSIZ, sizeof(char));
 		while(fgets(line, BUFSIZ, f) != NULL) {
 			char *name = strtok(line, " ");
-			printf("Checking %s against %s\n",name, username);
-			if(strncmp(username, name, strlen(username)) == 0) {
-				char *salt = strtok(NULL, " "); //TODO check all this shit
+			if(strncmp(username, name, strlen(username)) == 0) { //find their username
+				char *salt = strtok(NULL, " ");
 				char *hash = strtok(NULL, " "); //comes with '\n'
 				char *newline = strchr(hash, '\n'); //TODO hash might contain newlines?
 				if(newline)
 					newline = '\0';
-				printf("USER: %s, SALT: %s, HASH %s\n", username, salt, hash);
 				char *uhash = crypt(pword, salt);
-				printf("UHASH: %s\n", uhash);
-				if(strncmp(hash, uhash, strlen(uhash)) == 0) {
+				if(strncmp(hash, uhash, strlen(uhash)) == 0) { //compare the hashes
 					printf("Hashes match!\n");
 					return 1;
 				}
@@ -90,6 +91,7 @@ int verify_pword(char *username, char *pword)
 	}
 }
 
+//Verifies a client, ensure they actually sent us a certificate
 int verify_client(X509 *cert, char *username, char *pword)
 {
 	if(cert == NULL) {
@@ -107,6 +109,8 @@ int verify_client(X509 *cert, char *username, char *pword)
 	}
 }
 
+//checks whether a user has an account with us
+//uses the passwd file as an accounts file
 int user_exists(char *username)
 {
 	chmod(PFILE, S_IRUSR); //let us read the PFILE
@@ -129,18 +133,17 @@ int user_exists(char *username)
 		fclose(f);
 		return 0;
 	} else {
-		chmod(PFILE, 0);
+		chmod(PFILE, 0); //reset the password file perms to zero
 		perror("Could not open PFILE");
 		return errno;
 	}
 }
 
+//adds a user to the passwd file. Hash their passwd using crypt
 int add_user(char *username, char *pword)
 {
-	printf("Adding user %s\n", username);
 	char *salt = gensalt(NULL, get_rand);
 	char *phash = crypt(pword, salt); //TODO not using a great random function here
-	//memset(pword, 0, strlen(pword)); //ZEROS THE PASSWORD AFTER HASHING IT
 	chmod(PFILE, S_IWUSR); //let us write to the PFILE
 	FILE *f = fopen(PFILE, "a");
 	int result = 0;
@@ -151,9 +154,7 @@ int add_user(char *username, char *pword)
 		printf("Could not open PFILE to add a user");
 	fclose(f);
 	chmod(PFILE, 0);
-	//memset(phash, 0, strlen(phash));
 	free(salt);
-	//free(phash);
 	//THIS IS MAINLY FOR TESTING (SO WE DON'T HAVE TO RE-REGISTER EVERYONE)
 	f = fopen(ACCOUNTS_FILE,"a");
 	if(f != NULL) {
@@ -166,6 +167,10 @@ int add_user(char *username, char *pword)
 	return result;
 }
 
+//adds a new user to the bank
+//mainly added for testing, the registration process would be more robust
+//in a real application. Ideally this is an out of band communication with proper
+//user identification
 void register_user(BIO *bio, char *username, char *pword)
 {
 	char *message = strdup("REG_FAIL");
@@ -180,7 +185,7 @@ void register_user(BIO *bio, char *username, char *pword)
 	free(message);
 }
 
-
+//Initialises the accounts list
 void init_accounts()
 {
 	accounts = init_account_list();
@@ -199,11 +204,12 @@ void init_accounts()
 	}
 }
 
-struct t_list *transactions;
+struct t_list *whitelist; //The transaction token whitelist
 
+//Initialise the whitelist
 void init_transactions()
 {
-	transactions = init_trans_list();
+	whitelist = init_trans_list();
 
 }
 
@@ -221,7 +227,6 @@ int main(int argc, char **argv) {
 
 	while((opt = getopt(argc, argv, OPTLIST)) != -1) {
 		switch (opt) {
-			
 			default : fprintf(stderr,"%s : illegal option -%c\n", argv0,optopt);
 				argc = -1;
 				break;
@@ -289,10 +294,10 @@ int main(int argc, char **argv) {
 		exit(1);
 	}
 
+	//the accept loop
 	while(true) {
 		printf("waiting for new connection\n");
 		BIO_do_accept(abio);
-		printf("SOMEONE CONNECTED, TESTING CREDENTIALS\n");
 		out = BIO_pop(abio);
 		if(BIO_do_handshake(out) > 0) {
 			SSL* tmpssl;
@@ -318,16 +323,14 @@ int main(int argc, char **argv) {
 				
 				if(verify_client(client_cert, username, pword)) {
 					//memset(pword, 0 , strlen(pword));
-					printf("VERIFIED SUCCESSFULLY\n");
 					send_string(out, "CONN_OK");
 					
-					printf("Waiting for client request\n");
 					//get control message from client
 					struct message_client *m = calloc(1,sizeof(*m));
 					int messlen = 0;
 					while((messlen = get_c_message(out, m)) != 0) {
 						if(messlen < 0) {
-							printf("Message decoding error\n");
+							perror("Message decoding error");
 						}  else {
 							switch (m->ctrl) {
 								case B_QUERY :
@@ -348,7 +351,7 @@ int main(int argc, char **argv) {
 					}
 					printf("Client closed the connect\n");
 					account_list_print(accounts);
-					trans_tok_list_print(transactions);
+					trans_tok_list_print(whitelist);
 					free(m);
 				} else {
 					printf("COULD NOT VERIFY CLIENT\n");
@@ -368,27 +371,27 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
+
+//respond to a payment verification request
 void verify_response(BIO *bio, char* payee)
 {
 	struct trans_tok *t = calloc(1, sizeof *t);
 	get_trans_tok(bio, t);
 	if(t != NULL) {
-		printf("verifying token\n");
 		u_int orig_sig_len = t->sig_len;
 		t->sig_len = 0;
 		unsigned char *orig_sig = malloc(orig_sig_len);
 		memcpy(orig_sig, t->bank_sig, orig_sig_len);
 		t->bank_sig = "ABC"; //reset the message
 		int buf_size = 256;
-		char *buf = buffer_trans_tok(t, &buf_size);
+		//char *buf = buffer_trans_tok(t, &buf_size); this was for verifying with sig
 		FILE *f = fopen(string_cat(3, CERTPATH,"/", "bank.pem"), "r");
 		if(f != NULL) {
-			X509 *x = PEM_read_X509(f, NULL, NULL, NULL);
-			EVP_PKEY *pkey = X509_get_pubkey(x);
-			if(contains_trans_tok(transactions, t)) {
+			//X509 *x = PEM_read_X509(f, NULL, NULL, NULL); get the pub key for verifying the signature
+			//EVP_PKEY *pkey = X509_get_pubkey(x);
+			if(contains_trans_tok(whitelist, t)) {
 				//verify_signed_data(buf, buf_size, orig_sig, orig_sig_len, pkey)
-					printf("VERIFY SUCCESS\n");
-					if(!trans_tok_remove(transactions, t))
+					if(!trans_tok_remove(whitelist, t))
 						printf("DIDN'T REMOVE TRANSACTION\n");
 					//transfer the funds
 					struct account *payer_acc = account_get(accounts, t->payer);
@@ -419,11 +422,13 @@ void verify_response(BIO *bio, char* payee)
 	}
 }
 
+//Create a new transaction token for the payer 'username' for
+//'value' fluffy bucks
 struct trans_tok * create_token(char *username, int value)
 {	
 	struct trans_tok *t = create_trans_tok(username, 1, value, "ABC");
 	
-	while(contains_trans_tok(transactions, t)) {
+	while(contains_trans_tok(whitelist, t)) {
 		//TODO random serials
 		t->serial += 1; //find a serial we can use
 	}
@@ -453,23 +458,23 @@ struct trans_tok * create_token(char *username, int value)
 	*/
 }
 
+//respond to a withdraw request. create a token if the user has enough
+//money. Sends the token back if they do and add it to the whitelist
 void withdraw_response(BIO *bio, char *username)
 {
 	printf("processing withdrawal for %s\n",username);
 	struct trans_req *r = calloc(1,sizeof *r);
-	if(get_trans_req(bio, r) > 0) {
+	if(get_trans_req(bio, r) > 0) { //load the request
 		struct account *a = account_get(accounts, username);
 		account_print(a);
-		if(a->balance >= r->value) {
-			if(send_string(bio, "TRANS_OK") <= 0) {
+		if(a->balance >= r->value) { //check the balance
+			if(send_string(bio, "TRANS_OK") <= 0) { //respond
 				printf("couldn't send withdrawal response\n");
 			} else {
-				//TODO serials and sigs
 				struct trans_tok *t = create_token(username, r->value);
 				if(t != NULL) {
-					print_trans_tok(t);
-					if(send_trans_tok(bio, t) > 0) {
-						add_trans(transactions, t);
+					if(send_trans_tok(bio, t) > 0) { //send the new token back
+						add_trans(whitelist, t); //add it to the whitelist
 					} else
 						fprintf(stderr,"Trans Tok not sent, not deducting balance\n");
 				} else
@@ -484,9 +489,9 @@ void withdraw_response(BIO *bio, char *username)
 	}
 	printf("Finised withdraw\n");
 	free(r);
-	trans_tok_list_print(transactions);
 }
 
+//send back the user's balance
 void send_query_response(BIO *bio, char *username)
 {
 	if(contains_account(accounts, username)) {
@@ -494,10 +499,8 @@ void send_query_response(BIO *bio, char *username)
 		struct account *a = account_get(accounts, username);
 		char *str_bal = malloc(sizeof(char)*10);
 		sprintf(str_bal, "%d", a->balance);
-		//char *message = string_cat(3,username,": ", str_bal);
 		send_string(bio, str_bal);
 		free(str_bal);
-		//free(message);
 	} else {
 		send_string(bio, "User not found");
 	}

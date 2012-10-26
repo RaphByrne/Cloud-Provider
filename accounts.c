@@ -1,6 +1,11 @@
 #include "accounts.h"
 #include "utilities.h"
 
+/* This file contains the functions to manipulate the accounts and transaction token lists. Both are just
+ * simple linked lists.
+ *
+ */
+
 struct a_list* init_account_list()
 {
 	struct a_list* list;
@@ -67,10 +72,10 @@ void account_list_print(struct a_list *list)
 
 struct account * account_get(struct a_list *list, char *name)
 {	
-	printf("Getting account for %s\n", name);
+	//printf("Getting account for %s\n", name);
 	struct a_node *cursor = list->first;
 	while(cursor != NULL) {
-		printf("checking %s\n", cursor->a->a_name);
+		//printf("checking %s\n", cursor->a->a_name);
 		if(strncmp(name,cursor->a->a_name, strlen(cursor->a->a_name)) == 0)
 			return cursor->a;
 		cursor = cursor->next;

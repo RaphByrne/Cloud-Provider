@@ -91,8 +91,8 @@ int main(int argc, char **argv) {
 
 	char *operation = argv[1];
 	enum message_c_ctrl ctrl = string_to_ctrl(operation); //TODO check this
-	printf("Got operation: %s\n",operation);
-	printf("Doing: %s\n", ctrl_to_string(ctrl));	
+	//printf("Got operation: %s\n",operation);
+	//printf("Doing: %s\n", ctrl_to_string(ctrl));	
 	
 	argv += 2;
 	argc -= 2;
@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
 			exit(1);
 		}
 		if(ctrl == REGISTER) {
-			printf("Registering\n");
+			//printf("Registering\n");
 			if(op_REGISTER(bio, argv[0], argv[1]) > 0) {
 				printf("REGISTRY SUCCESS\n");
 			} else {
@@ -244,7 +244,7 @@ int send_payment(BIO *bio, char *bank_add, long filesize)
 {
 	float fvalue = (filesize/(1024*1024)); //TODO convert to megabytes properly. Not handling 1.0 MB case
 	int value = (int)(fvalue + 1);
-	printf("Trying to get %d fluffy bucks from bank\n", value);
+	//printf("Trying to get %d fluffy bucks from bank\n", value);
 	struct trans_tok *t = contact_bank(bank_add, value);
 	if(t != NULL) {
 		printf("Withdrew from bank\n");
@@ -358,12 +358,6 @@ void op_LIST(BIO *bio)
 int compare_hashes(unsigned char *key, unsigned char *enc_hash, int enc_len, unsigned char *p_hash, int p_len)
 {
 	unsigned char *hash = blowfish_dec(key, enc_hash, enc_len);
-	printf("ENC_HASH: ");
-	print_hash(enc_hash, enc_len);
-	printf("DEC_HASH: ");
-	print_hash(hash, enc_len);
-	printf("P_HASH: ");
-	print_hash(p_hash, p_len);
 	return unsigned_string_equals(hash, enc_len, p_hash, p_len);
 }
 

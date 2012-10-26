@@ -96,6 +96,7 @@ Once connected to either server the client must enter a username and password wh
 enshrouded passwords in a password file. During a REGISTER operation the passwords are also salted, the
 salts are (pseudo)randomly generated. The users password is also used in conjunction with other user data to
 generate a verification key. Password authentication prevents users from access others' files and vice versa.
+The password file is kept with zeroed permissions while not being read.
 
 
 The verification key is used for file encryption and file verification. It is generated using a combination of
@@ -106,6 +107,10 @@ done using the verification key described above. Currently the file encryption d
 machines. It is recommended that you do not use the '-e' flag. The data is mostly decrypted properly but time constraints
 have prevented me from completely fixing this function. If it did would it would be using triple des encryption with
 cipher block chaining. Chosen for its security and variable key length.
+
+Once a file is one the server it is owned by the provider and its permissions are set to read only. The user's file
+permissions are sent along with the files and stored in a separate directory. When a file is retrieved with the 
+client application its permissions are restored.
 
 File verificiation is done by the following process:
 1) When sending a file to the provider a sha512 message digest of the file is computed and then encrypted with the 
@@ -137,7 +142,9 @@ logged in the cloud-bank's whitelist. The funds are not withdrawn at this point.
 6) The provider immediately attempts to verify the token and sends it to the bank
 7) If the token given by any user (provider or user) is in the transaction whitelist (i.e. issued by this bank)
 then the funds are withdrawn from the payer's account into the payee's account and the token is removed from
-the whitelist. Revoking it.
+the whitelist, revoking it.
+8) The file is then sent to provider, if the size exceeds the reported size that was agreed upon previously
+then the operation is terminated.
 
 I had also originally intended to verify the tokens using signatures created using the bank's private key which
 would ensure that only that particular bank as verified by the CA could have issued the token and can verify
@@ -159,6 +166,10 @@ simple network disconnections during file transfers/money requests would lose th
 by having the provider/user hold onto already withdrawn tokens and attempt to reuse them if a file transfer can not
 be completed. Another option would be for the bank to re-issue tokens if the amount required equals the amount already
 produced. This could be done until the token has been revoked by being "cashed in".
+
+File names are preserved on the remote file server which could leak user information. Ideally some kind secure database
+of files would be used to store users filenames and then files would be stored with arbitrary names and not all in the
+same location
 
 Acknowledgements:
 http://www.openssl.org/docs/ - many openssl examples

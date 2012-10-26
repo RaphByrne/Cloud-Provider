@@ -4,6 +4,11 @@
 #include <string.h>
 #include "b_messages.h"
 
+/*
+ * Definitions for the account list and transaction token list
+ * Both are just linked lists
+ */
+
 struct account {
 	char *a_name;
 	int balance;

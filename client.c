@@ -18,7 +18,7 @@
 #include "messages.h"
 #include "utilities.h"
 
-#define	OPTLIST	""
+#define	OPTLIST	"e"
 #define CERTPATH "certs"
 #define FILEPATH "files"
 #define TMPPATH "tmp"
@@ -27,7 +27,7 @@ extern char *strdup(const char *str);
 //extern int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
 
 char *argv0 = NULL;
-
+bool cryptflag;
 
 void set_up_SSL(SSL_CTX *ctx, SSL* ssl, BIO* bio, char * username);
 int op_REGISTER(BIO *bio, char *username, char *pword);
@@ -59,21 +59,6 @@ void init_SSL()
 	OpenSSL_add_all_digests();
 }
 
-int test_privkey(char *username)
-{
-	char *keyname = string_cat(4,CERTPATH,"/",username,"-key.pem");
-	FILE *f = fopen(keyname, "r");
-	if(f == NULL)
-		return -1;
-	int result = 1;
-	EVP_PKEY *key = PEM_read_PrivateKey(f, NULL, 0, "");
-	if(key != NULL) //if we can open this with a blank password then reject it
-		result = 0;
-	fclose(f);
-	free(keyname);
-	return result;
-}
-
 
 int main(int argc, char **argv) {	
 	
@@ -84,9 +69,12 @@ int main(int argc, char **argv) {
 
 	int opt;
 
+	cryptflag = false;
 	while((opt = getopt(argc, argv, OPTLIST)) != -1) {
 		switch (opt) {
-			
+			case 'e' :
+				cryptflag = true;
+				break;
 			default : fprintf(stderr,"%s : illegal option -%c\n", argv0,optopt);
 				argc = -1;
 				break;
@@ -275,8 +263,11 @@ void op_ADD(BIO *bio, int num_files, char** files, mode_t perms, unsigned char *
 {
 	for(int i = 0; i < num_files; i++) {
 		char *filename = files[i];
-		char *tmpname = string_cat(3,TMPPATH,"/",filename);
-		decrypt_encrypt_file(filename, tmpname, key, 1); //encrypt the file
+		char *tmpname = filename;
+		if(cryptflag) {
+			tmpname = string_cat(3,TMPPATH,"/",filename);
+			decrypt_encrypt_file(filename, tmpname, key, 1); //encrypt the file
+		}
 
 		long filesize = size_of_file(tmpname);
 		send_create_message(bio, ADD, filename, "", perms, filesize);
@@ -312,14 +303,17 @@ void op_FETCH(BIO *bio, int num_files, char** files, unsigned char *key)
 		get_c_message(bio, m);
 		if(m->ctrl == FETCH) {
 			if(verify_remote_file(bio, filename, key)) {
-				char *tmpname = string_cat(3,TMPPATH,"/",filename);
-				get_file(bio, tmpname, m->file_perm, m->file_size);
-				
 				char *store_name = string_cat(3,FILEPATH,"/",m->name);
-				decrypt_encrypt_file(tmpname, store_name, key, 0); //decrypt the file
+				if(cryptflag) {
+					char *tmpname = string_cat(3,TMPPATH,"/",filename);
+					get_file(bio, tmpname, m->file_perm, m->file_size);
+					decrypt_encrypt_file(tmpname, store_name, key, 0); //decrypt the file
+					remove(tmpname);
+				} else {
+					get_file(bio, store_name, m->file_perm, m->file_size);
+				}
 				free(store_name);
 				printf("Remote file %s fetched to %s\n",m->name, filename);
-				remove(tmpname);
 			} else
 				printf("Could not verify %s\n", filename);
 		} else

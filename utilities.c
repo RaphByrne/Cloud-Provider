@@ -548,7 +548,13 @@ struct ssl_connection * connect_to(char *address, char *certpath, char *cacert, 
 
 	//client stuff goes here
 	//set server hostname
-	BIO_set_conn_hostname(conn->bio, address);
+	if(BIO_set_conn_hostname(conn->bio, address) <= 0)
+	{
+		printf("Address error\n");
+		ssl_error("BIO connect error");
+		exit(1);
+
+	}
 	printf("attempting to connect to %s\n",address);
 	//test connection
 	if(BIO_do_connect(conn->bio) <= 0)

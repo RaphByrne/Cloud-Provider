@@ -34,7 +34,7 @@ extern char *strdup(const char *str);
 
 char *argv0 = NULL;
 int num_users = 0;
-char *bank_add;
+static char *bank_add;
 
 void verify_file(BIO *bio, char *username, char* filename);
 
@@ -234,7 +234,7 @@ int delete_file(BIO *bio, char* username, char* filename)
 
 int verify_token(struct trans_tok *t)
 {
-	//TODO need to log in to bank
+	printf("Attempting to connect to bank at %s\n", bank_add);
 	struct ssl_connection *conn = connect_to(bank_add,CERTPATH,"ca-cert.pem","provider.pem","provider-key.pem");
 	if(conn != NULL) {
 		BIO *bio = conn->bio;
@@ -468,27 +468,12 @@ int main(int argc, char **argv) {
 	
 	init_SSL();
 
-	argv0	= (argv0 = strrchr(argv[0],'/')) ? argv0+1 : argv[0];
-	opterr	= 0;
-
-	int opt;
-
-	while((opt = getopt(argc, argv, OPTLIST)) != -1) {
-		switch (opt) {
-			
-			default : fprintf(stderr,"%s : illegal option -%c\n", argv0,optopt);
-				argc = -1;
-				break;
-		}
-	}
-	argv += optind;
-	argc -= optind;
-	//  CHECK THAT ALL PROVIDED ARGUMENTS WERE VALID
 	if(argc < 2)
 		usage(1);
-	
-	char *port = argv[0];
-	char *bank_add = argv[1];
+
+	printf("Arg 1:%s Arg 2:%s\n",argv[1],argv[2]);	
+	char *port = argv[1];
+	bank_add = argv[2];
 
 	SSL_CTX *ctx = (SSL_CTX *)SSL_CTX_new(SSLv23_server_method());
 	SSL *ssl;
@@ -534,9 +519,12 @@ int main(int argc, char **argv) {
 	SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
 	SSL_set_verify(ssl, SSL_VERIFY_FAIL_IF_NO_PEER_CERT | SSL_VERIFY_PEER, NULL);
 
+	printf("Setting up on port %s\n", port);
+	
 	abio = BIO_new_accept(port);
 	BIO_set_accept_bios(abio, bio);
 	BIO_set_bind_mode(abio, BIO_BIND_REUSEADDR);
+	printf("Accepting on %s\n", BIO_get_conn_port(abio));
 	//test connection
 	if(BIO_do_accept(abio) <= 0)
 	{
